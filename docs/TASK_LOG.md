@@ -111,3 +111,13 @@
 - Xác minh `SleepRepository.addSession` thay thế giá trị có cùng ID bằng chính object snapshot được truyền vào; Provider cũng gán cùng snapshot làm `lastCompletedSession`, nên dữ liệu hai phía khớp hoàn toàn trong implementation hiện tại.
 - Phát hiện và sửa trường hợp active key đã xóa nhưng pending key còn lại: thêm trường `repository_saved` trong JSON snapshot trên cùng SharedPreferences key, được ghi sau khi Repository lưu. Startup nhận diện pending đã xác nhận, upsert lại cùng snapshot để khôi phục history của repository process-local, hiển thị completed thay vì tracking, rồi thử cleanup. Trạng thái xác nhận và snapshot được xóa cùng một key; nếu cleanup key lỗi, startup vẫn biết snapshot đã được Repository xác nhận.
 - Nếu khôi phục/upsert Repository ở startup thất bại, pending giữ trạng thái có thể thử lại thay vì báo hoàn tất. Không đổi API/schema/database.
+
+## 2026-11-12 — Đợt 6B: cleanup pending snapshot trước phiên mới
+
+- Xác nhận checkout bắt đầu tại `63fdbcc`; đọc AGENTS và rà soát Service/Provider/UI/task log hiện tại.
+- `SleepProvider.startTracking` nay nạp lại persisted state trước khi quyết định. Pending chưa được Repository xác nhận sẽ báo rõ và không bị xóa; pending đã xác nhận phải cleanup active/pending thành công trước khi gọi Service. Lỗi cleanup được trả cho UI và không tạo/ghi đè phiên mới. `lastCompletedSession` chỉ được xóa sau khi active mới đã được ghi thành công.
+- `SleepTrackingService.startSleepTracking` kiểm tra pending/active và khóa bắt đầu đồng thời; chỉ gán `_activeSession` sau khi `SharedPreferences.setString` trả `true`, nếu không thì ném lỗi. Provider chỉ cập nhật active/timer sau khi Service xác nhận ghi.
+- UI hiển thị thông điệp cụ thể của Provider cho phiên trước chưa lưu hoặc cleanup chưa hoàn tất; trạng thái hoàn tất giữ nguyên khi bắt đầu thất bại.
+- Không đổi model, mock data, route, dependency, backend/API, Supabase/schema/database.
+- `git diff --check` chạy sau thay đổi. `dart format` và `flutter analyze --no-pub` được thử nhưng không phản hồi sau 30 giây, đã dừng; chưa xác minh analyzer hoặc runtime. Các kịch bản lỗi SharedPreferences/cleanup cần kiểm tra trên môi trường hỗ trợ.
+- Trước cleanup pending đã xác nhận trong `startTracking`, Provider upsert snapshot cũ vào Repository trước để bảo toàn lịch sử process-local; lỗi rehydrate cũng chặn phiên mới và giữ snapshot.

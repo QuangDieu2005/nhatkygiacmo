@@ -11,6 +11,7 @@ class SleepTrackingService {
   SleepSessionModel? _activeSession;
   SleepSessionModel? _pendingCompletedSession;
   bool _pendingCompletedSessionSaved = false;
+  bool _isStarting = false;
 
   SleepSessionModel? get activeSession => _activeSession;
   SleepSessionModel? get pendingCompletedSession => _pendingCompletedSession;
@@ -53,21 +54,38 @@ class SleepTrackingService {
   }
 
   Future<SleepSessionModel> startSleepTracking({String userId = 'user_01'}) async {
-    if (isTracking) return _activeSession ?? _pendingCompletedSession!;
+    if (_isStarting) {
+      throw StateError('A sleep tracking start is already in progress.');
+    }
+    if (isTracking) {
+      throw StateError('An active or pending sleep session must be resolved first.');
+    }
 
-    final session = SleepSessionModel(
-      id: 'session_${DateTime.now().millisecondsSinceEpoch}',
-      userId: userId,
-      startTime: DateTime.now(),
-      isTracking: true,
-      createdAt: DateTime.now(),
-    );
+    _isStarting = true;
+    try {
+      final now = DateTime.now();
+      final session = SleepSessionModel(
+        id: 'session_${now.millisecondsSinceEpoch}',
+        userId: userId,
+        startTime: now,
+        isTracking: true,
+        createdAt: now,
+      );
 
-    _activeSession = session;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConstants.prefActiveSession, jsonEncode(session.toJson()));
+      final prefs = await SharedPreferences.getInstance();
+      final persisted = await prefs.setString(
+        AppConstants.prefActiveSession,
+        jsonEncode(session.toJson()),
+      );
+      if (!persisted) {
+        throw StateError('Could not persist the active sleep session.');
+      }
 
-    return session;
+      _activeSession = session;
+      return session;
+    } finally {
+      _isStarting = false;
+    }
   }
 
   /// Builds a completed snapshot without ending or persisting the active state.

@@ -6,6 +6,15 @@ import '../models/dream_model.dart';
 import '../repositories/sleep_repository.dart';
 import '../services/sleep_tracking_service.dart';
 
+class SleepTrackingStartException implements Exception {
+  const SleepTrackingStartException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class SleepProvider extends ChangeNotifier {
   final SleepRepository _repository = SleepRepository.instance;
   final SleepTrackingService _trackingService = SleepTrackingService.instance;
@@ -38,12 +47,6 @@ class SleepProvider extends ChangeNotifier {
         // process-local can rebuild their current history from the durable snapshot.
         await _repository.addSession(pending);
         _lastCompletedSession = pending;
-        try {
-          await _trackingService.clearActiveSession();
-        } catch (_) {
-          // Repository confirmation remains authoritative; stale preference
-          // cleanup can be retried on the next initialization.
-        }
       } catch (_) {
         // If repository restoration fails, retain the pending session as a
         // retryable state instead of reporting it as completed.
@@ -94,13 +97,54 @@ class SleepProvider extends ChangeNotifier {
   }
 
   Future<void> startTracking({String userId = 'user_01'}) async {
-    if (_isStarting || _isStopping || isTracking || _trackingService.isTracking) return;
+    if (_isStarting) {
+      throw const SleepTrackingStartException('Đang bắt đầu theo dõi giấc ngủ.');
+    }
+    if (_isStopping) {
+      throw const SleepTrackingStartException('Đang lưu phiên ngủ hiện tại.');
+    }
+    if (isTracking) {
+      throw const SleepTrackingStartException('Phiên ngủ hiện tại vẫn đang theo dõi.');
+    }
+
     _isStarting = true;
-    _lastCompletedSession = null;
     try {
+      // Refresh persisted state before deciding whether a new session is safe.
+      await _trackingService.init();
+      final pending = _trackingService.pendingCompletedSession;
+      if (pending != null) {
+        if (!_trackingService.isPendingCompletedSessionSaved) {
+          throw const SleepTrackingStartException(
+            'Phiên ngủ trước chưa được lưu. Hãy kết thúc và thử lưu lại phiên đó trước.',
+          );
+        }
+
+        try {
+          // Rehydrate process-local history before deleting its durable snapshot.
+          await _repository.addSession(pending);
+        } catch (_) {
+          throw const SleepTrackingStartException(
+            'Chưa thể khôi phục phiên đã lưu vào lịch sử. Hãy thử lại.',
+          );
+        }
+
+        try {
+          await _trackingService.clearActiveSession();
+        } catch (_) {
+          throw const SleepTrackingStartException(
+            'Phiên trước đã lưu nhưng chưa thể dọn trạng thái cũ. Hãy thử lại.',
+          );
+        }
+      } else if (_trackingService.activeSession != null) {
+        throw const SleepTrackingStartException(
+          'Đã có phiên ngủ cần được khôi phục trước khi bắt đầu phiên mới.',
+        );
+      }
+
       final session = await _trackingService.startSleepTracking(userId: userId);
       _activeSession = session;
       _startElapsedTimer();
+      _lastCompletedSession = null;
       notifyListeners();
     } finally {
       _isStarting = false;

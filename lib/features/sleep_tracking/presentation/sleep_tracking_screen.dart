@@ -79,8 +79,13 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen> {
     setState(() => _isStarting = true);
     try {
       await provider.startTracking();
-    } catch (_) {
-      if (mounted) _showMessage('Không thể bắt đầu theo dõi. Vui lòng thử lại.');
+    } catch (error) {
+      if (mounted) {
+        final message = error is SleepTrackingStartException
+            ? error.message
+            : 'Không thể bắt đầu theo dõi. Vui lòng thử lại.';
+        _showMessage(message);
+      }
     } finally {
       if (mounted) setState(() => _isStarting = false);
     }
