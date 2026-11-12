@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/utils/date_formatter.dart';
@@ -50,7 +51,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final auth = context.watch<AuthProvider>();
     final sleep = context.watch<SleepProvider>();
     final dream = context.watch<DreamProvider>();
-    final latestSession = sleep.sessions.isNotEmpty ? sleep.sessions.first : null;
+    final latestSession = sleep.sessions.isNotEmpty
+        ? sleep.sessions.first
+        : null;
     final today = DateTime.now();
 
     return Scaffold(
@@ -66,10 +69,17 @@ class _HomeScreenState extends State<HomeScreen> {
             },
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final horizontalPadding = constraints.maxWidth < 360 ? 16.0 : 22.0;
+                final horizontalPadding = constraints.maxWidth < 360
+                    ? 16.0
+                    : 22.0;
                 return SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(horizontalPadding, 18, horizontalPadding, 28),
+                  padding: EdgeInsets.fromLTRB(
+                    horizontalPadding,
+                    18,
+                    horizontalPadding,
+                    28,
+                  ),
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 680),
@@ -130,9 +140,9 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(
                 _getGreeting(),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.primaryLight,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  color: AppColors.primaryLight,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -177,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ) {
     final hasSession = latestSession != null;
     final duration = hasSession
-        ? '${(latestSession!.totalMinutes / 60).toStringAsFixed(1)}h'
+        ? '${(latestSession.totalMinutes / 60).toStringAsFixed(1)}h'
         : '—';
 
     return Container(
@@ -207,18 +217,25 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: AppColors.starGold.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(13),
                 ),
-                child: const Icon(Icons.bedtime_rounded, color: AppColors.starGold, size: 20),
+                child: const Icon(
+                  Icons.bedtime_rounded,
+                  color: AppColors.starGold,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 11),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Tổng quan giấc ngủ', style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Tổng quan giấc ngủ',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       hasSession
-                          ? 'Đêm ${DateFormatter.formatRelative(latestSession!.startTime)}'
+                          ? 'Đêm ${DateFormatter.formatRelative(latestSession.startTime)}'
                           : 'Đêm gần nhất',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
@@ -253,7 +270,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(width: 8),
               if (hasSession)
-                SleepQualityIndicator(score: latestSession!.qualityScore, size: 76)
+                SleepQualityIndicator(
+                  score: latestSession.qualityScore,
+                  size: 76,
+                )
               else
                 _buildQualityEmptyState(),
               const SizedBox(width: 8),
@@ -296,10 +316,14 @@ class _HomeScreenState extends State<HomeScreen> {
     bool alignEnd = false,
   }) {
     return Column(
-      crossAxisAlignment: alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      crossAxisAlignment: alignEnd
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
       children: [
         Row(
-          mainAxisAlignment: alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+          mainAxisAlignment: alignEnd
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
           children: [
             Icon(icon, size: 15, color: accent),
             const SizedBox(width: 5),
@@ -308,10 +332,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontSize: 23,
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(context).textTheme.titleLarge
+                    ?.copyWith(fontSize: 23, fontWeight: FontWeight.w700),
               ),
             ),
           ],
@@ -337,7 +359,11 @@ class _HomeScreenState extends State<HomeScreen> {
         color: AppColors.surface.withOpacity(0.72),
         border: Border.all(color: AppColors.divider),
       ),
-      child: const Icon(Icons.bedtime_outlined, color: AppColors.textMuted, size: 27),
+      child: const Icon(
+        Icons.bedtime_outlined,
+        color: AppColors.textMuted,
+        size: 27,
+      ),
     );
   }
 
@@ -347,10 +373,16 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: _QuickActionCard(
             title: isTrackingActive ? 'Đang theo dõi' : 'Theo dõi giấc ngủ',
-            subtitle: isTrackingActive ? 'Chạm để xem phiên' : 'Bắt đầu phiên ngủ',
-            icon: isTrackingActive ? Icons.bedtime_rounded : Icons.nights_stay_rounded,
+            subtitle: isTrackingActive
+                ? 'Chạm để xem phiên'
+                : 'Bắt đầu phiên ngủ',
+            icon: isTrackingActive
+                ? Icons.bedtime_rounded
+                : Icons.nights_stay_rounded,
             gradient: isTrackingActive
-                ? const LinearGradient(colors: [Color(0xFFBD6676), Color(0xFF895A9D)])
+                ? const LinearGradient(
+                    colors: [Color(0xFFBD6676), Color(0xFF895A9D)],
+                  )
                 : AppColors.sleepGradient,
             onTap: () => context.go(AppRoutes.sleepTracking),
           ),
@@ -393,16 +425,25 @@ class _HomeScreenState extends State<HomeScreen> {
           minY: 0,
           barTouchData: BarTouchData(
             touchTooltipData: BarTouchTooltipData(
-              getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem(
-                '${rod.toY.toStringAsFixed(1)} giờ',
-                const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-              ),
+              getTooltipItem: (group, groupIndex, rod, rodIndex) =>
+                  BarTooltipItem(
+                    '${rod.toY.toStringAsFixed(1)} giờ',
+                    const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
             ),
           ),
           titlesData: FlTitlesData(
             show: true,
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
@@ -410,7 +451,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 interval: 4,
                 getTitlesWidget: (value, meta) => Text(
                   '${value.toInt()}h',
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 10,
+                  ),
                 ),
               ),
             ),
@@ -420,7 +464,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 reservedSize: 28,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
-                  if (index < 0 || index >= weekly.length) return const SizedBox.shrink();
+                  if (index < 0 || index >= weekly.length)
+                    return const SizedBox.shrink();
                   return Padding(
                     padding: const EdgeInsets.only(top: 7),
                     child: Text(
@@ -440,10 +485,8 @@ class _HomeScreenState extends State<HomeScreen> {
             show: true,
             drawVerticalLine: false,
             horizontalInterval: 4,
-            getDrawingHorizontalLine: (value) => const FlLine(
-              color: AppColors.divider,
-              strokeWidth: 1,
-            ),
+            getDrawingHorizontalLine: (value) =>
+                const FlLine(color: AppColors.divider, strokeWidth: 1),
           ),
           borderData: FlBorderData(show: false),
           barGroups: List.generate(weekly.length, (index) {
@@ -454,9 +497,13 @@ class _HomeScreenState extends State<HomeScreen> {
               barRods: [
                 BarChartRodData(
                   toY: stat.hours.clamp(0, 12).toDouble(),
-                  gradient: reachedGoal ? AppColors.primaryGradient : AppColors.sleepGradient,
+                  gradient: reachedGoal
+                      ? AppColors.primaryGradient
+                      : AppColors.sleepGradient,
                   width: weekly.length > 5 ? 14 : 20,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(6),
+                  ),
                   backDrawRodData: BackgroundBarChartRodData(
                     show: true,
                     toY: 12,

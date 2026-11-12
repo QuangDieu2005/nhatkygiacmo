@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../models/dream_model.dart';
@@ -57,65 +58,102 @@ class _DreamListScreenState extends State<DreamListScreen> {
             onRefresh: _refresh,
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final horizontalPadding = constraints.maxWidth < 360 ? 16.0 : 22.0;
-                return CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                  slivers: [
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(horizontalPadding, 20, horizontalPadding, 18),
-                      sliver: SliverToBoxAdapter(child: _buildHeader(context)),
-                    ),
-                    SliverPadding(
-                      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-                      sliver: SliverToBoxAdapter(child: _buildSearchField(provider)),
-                    ),
-                    SliverPadding(
-                      padding: EdgeInsets.only(top: 18, bottom: 8),
-                      sliver: SliverToBoxAdapter(
-                        child: _buildEmotionFilters(provider, horizontalPadding),
-                      ),
-                    ),
-                    if (provider.isLoading && provider.allDreams.isEmpty)
-                      const SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: LoadingIndicator(message: 'Đang tải nhật ký giấc mơ...'),
-                      )
-                    else if (provider.errorMessage != null && provider.allDreams.isEmpty)
-                      SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: _buildErrorState(provider),
-                      )
-                    else if (dreams.isEmpty)
-                      SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: _buildEmptyState(provider),
-                      )
-                    else ...[
-                      if (provider.errorMessage != null)
+                final horizontalPadding = constraints.maxWidth < 360
+                    ? 16.0
+                    : 22.0;
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: CustomScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      slivers: [
                         SliverPadding(
-                          padding: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 10),
-                          sliver: SliverToBoxAdapter(child: _buildInlineError(provider)),
-                        ),
-                      SliverPadding(
-                        padding: EdgeInsets.fromLTRB(horizontalPadding, 4, horizontalPadding, 28),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final dream = dreams[index];
-                              return DreamListCard(
-                                dream: dream,
-                                onTap: () => context.push(
-                                  '${AppRoutes.dreamDetail}/${dream.id}',
-                                ),
-                              );
-                            },
-                            childCount: dreams.length,
+                          padding: EdgeInsets.fromLTRB(
+                            horizontalPadding,
+                            20,
+                            horizontalPadding,
+                            18,
+                          ),
+                          sliver: SliverToBoxAdapter(
+                            child: _buildHeader(context),
                           ),
                         ),
-                      ),
-                    ],
-                  ],
+                        SliverPadding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: horizontalPadding,
+                          ),
+                          sliver: SliverToBoxAdapter(
+                            child: _buildSearchField(provider),
+                          ),
+                        ),
+                        SliverPadding(
+                          padding: EdgeInsets.only(top: 18, bottom: 8),
+                          sliver: SliverToBoxAdapter(
+                            child: _buildEmotionFilters(
+                              provider,
+                              horizontalPadding,
+                            ),
+                          ),
+                        ),
+                        if (provider.isLoading && provider.allDreams.isEmpty)
+                          const SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: LoadingIndicator(
+                              message: 'Đang tải nhật ký giấc mơ...',
+                            ),
+                          )
+                        else if (provider.errorMessage != null &&
+                            provider.allDreams.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: _buildErrorState(provider),
+                          )
+                        else if (dreams.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: _buildEmptyState(provider),
+                          )
+                        else ...[
+                          if (provider.errorMessage != null)
+                            SliverPadding(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontalPadding,
+                                0,
+                                horizontalPadding,
+                                10,
+                              ),
+                              sliver: SliverToBoxAdapter(
+                                child: _buildInlineError(provider),
+                              ),
+                            ),
+                          SliverPadding(
+                            padding: EdgeInsets.fromLTRB(
+                              horizontalPadding,
+                              4,
+                              horizontalPadding,
+                              28,
+                            ),
+                            sliver: SliverList(
+                              delegate: SliverChildBuilderDelegate((
+                                context,
+                                index,
+                              ) {
+                                final dream = dreams[index];
+                                return DreamListCard(
+                                  dream: dream,
+                                  onTap: () => context.push(
+                                    '${AppRoutes.dreamDetail}/${dream.id}',
+                                  ),
+                                );
+                              }, childCount: dreams.length),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 );
               },
             ),
@@ -133,10 +171,13 @@ class _DreamListScreenState extends State<DreamListScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Không gian của bạn', style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.primaryLight,
-                fontWeight: FontWeight.w600,
-              )),
+              Text(
+                'Không gian của bạn',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.primaryLight,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 5),
               Text(
                 'Nhật ký giấc mơ',
@@ -162,7 +203,9 @@ class _DreamListScreenState extends State<DreamListScreen> {
             style: IconButton.styleFrom(
               backgroundColor: AppColors.primary.withOpacity(0.18),
               foregroundColor: AppColors.primaryLight,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               side: BorderSide(color: AppColors.primary.withOpacity(0.28)),
             ),
             icon: const Icon(Icons.add_rounded),
@@ -194,7 +237,10 @@ class _DreamListScreenState extends State<DreamListScreen> {
     );
   }
 
-  Widget _buildEmotionFilters(DreamProvider provider, double horizontalPadding) {
+  Widget _buildEmotionFilters(
+    DreamProvider provider,
+    double horizontalPadding,
+  ) {
     final selectedEmotion = provider.selectedEmotion;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,7 +250,10 @@ class _DreamListScreenState extends State<DreamListScreen> {
           child: Row(
             children: [
               Expanded(
-                child: Text('Lọc theo cảm xúc', style: Theme.of(context).textTheme.titleMedium),
+                child: Text(
+                  'Lọc theo cảm xúc',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
               Text(
                 '${provider.filteredDreams.length} giấc mơ',
@@ -227,7 +276,9 @@ class _DreamListScreenState extends State<DreamListScreen> {
                 onTap: () => provider.setSelectedEmotion(null),
               ),
               ...EmotionType.values.map((emotion) {
-                final count = provider.allDreams.where((dream) => dream.emotion == emotion).length;
+                final count = provider.allDreams
+                    .where((dream) => dream.emotion == emotion)
+                    .length;
                 return _buildFilterChip(
                   label: '${emotion.emoji} ${emotion.label}',
                   count: count,
@@ -259,7 +310,9 @@ class _DreamListScreenState extends State<DreamListScreen> {
         onSelected: (_) => onTap(),
         backgroundColor: AppColors.surface.withOpacity(0.82),
         selectedColor: accent.withOpacity(0.18),
-        side: BorderSide(color: isSelected ? accent.withOpacity(0.6) : AppColors.divider),
+        side: BorderSide(
+          color: isSelected ? accent.withOpacity(0.6) : AppColors.divider,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         padding: const EdgeInsets.symmetric(horizontal: 3),
         label: Text('$label  $count'),
@@ -273,7 +326,8 @@ class _DreamListScreenState extends State<DreamListScreen> {
   }
 
   Widget _buildEmptyState(DreamProvider provider) {
-    final hasActiveFilter = provider.searchQuery.trim().isNotEmpty ||
+    final hasActiveFilter =
+        provider.searchQuery.trim().isNotEmpty ||
         provider.selectedEmotion != null;
     if (hasActiveFilter) {
       return EmptyState(
@@ -287,7 +341,8 @@ class _DreamListScreenState extends State<DreamListScreen> {
     return EmptyState(
       icon: Icons.auto_stories_outlined,
       title: 'Chưa có giấc mơ nào',
-      message: 'Ghi lại những hình ảnh và cảm xúc bạn còn nhớ sau khi thức dậy.',
+      message:
+          'Ghi lại những hình ảnh và cảm xúc bạn còn nhớ sau khi thức dậy.',
       actionLabel: 'Ghi giấc mơ đầu tiên',
       onAction: () => context.push(AppRoutes.addDream),
     );
@@ -314,15 +369,24 @@ class _DreamListScreenState extends State<DreamListScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
           child: Row(
             children: [
-              const Icon(Icons.info_outline_rounded, color: AppColors.error, size: 18),
+              const Icon(
+                Icons.info_outline_rounded,
+                color: AppColors.error,
+                size: 18,
+              ),
               const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   'Không thể làm mới. Chạm để thử lại.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textPrimary),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AppColors.textPrimary),
                 ),
               ),
-              const Icon(Icons.refresh_rounded, color: AppColors.error, size: 18),
+              const Icon(
+                Icons.refresh_rounded,
+                color: AppColors.error,
+                size: 18,
+              ),
             ],
           ),
         ),

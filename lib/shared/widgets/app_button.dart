@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/constants/app_colors.dart';
 
 enum AppButtonVariant { primary, secondary, outlined, text }
@@ -39,13 +40,13 @@ class AppButton extends StatelessWidget {
             ),
           )
         else ...[
-          if (icon != null) ...[
-            Icon(icon, size: 20),
-            const SizedBox(width: 8),
-          ],
-          Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+          if (icon != null) ...[Icon(icon, size: 20), const SizedBox(width: 8)],
+          Flexible(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            ),
           ),
         ],
       ],
@@ -73,7 +74,9 @@ class AppButton extends StatelessWidget {
               backgroundColor: Colors.transparent,
               shadowColor: Colors.transparent,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             ),
             child: buttonContent,
           ),
@@ -86,7 +89,9 @@ class AppButton extends StatelessWidget {
             backgroundColor: AppColors.surfaceLight,
             foregroundColor: AppColors.textPrimary,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
           child: buttonContent,
         );
@@ -96,9 +101,14 @@ class AppButton extends StatelessWidget {
           onPressed: isLoading ? null : onPressed,
           style: OutlinedButton.styleFrom(
             foregroundColor: customColor ?? AppColors.primaryLight,
-            side: BorderSide(color: customColor ?? AppColors.primary, width: 1.5),
+            side: BorderSide(
+              color: customColor ?? AppColors.primary,
+              width: 1.5,
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
           child: buttonContent,
         );

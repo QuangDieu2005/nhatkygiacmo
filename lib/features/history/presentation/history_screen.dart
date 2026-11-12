@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/utils/date_formatter.dart';
@@ -19,7 +20,8 @@ class HistoryScreen extends StatefulWidget {
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
-class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProviderStateMixin {
+class _HistoryScreenState extends State<HistoryScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   HistoryFilter _currentFilter = HistoryFilter.all;
 
@@ -52,8 +54,12 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
     final dreamProvider = context.watch<DreamProvider>();
     final sleepProvider = context.watch<SleepProvider>();
 
-    final filteredDreams = dreamProvider.allDreams.where((d) => _matchesFilter(d.dreamDate)).toList();
-    final filteredSessions = sleepProvider.sessions.where((s) => _matchesFilter(s.startTime)).toList();
+    final filteredDreams = dreamProvider.allDreams
+        .where((d) => _matchesFilter(d.dreamDate))
+        .toList();
+    final filteredSessions = sleepProvider.sessions
+        .where((s) => _matchesFilter(s.startTime))
+        .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -70,15 +76,17 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
         ),
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.nightSkyGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
         child: SafeArea(
           child: Column(
             children: [
               // Bộ lọc thời gian: Tất cả, Tuần này, Tháng này
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     _buildFilterChip('Tất cả', HistoryFilter.all),
@@ -103,13 +111,18 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                             message: 'Hãy chọn mốc thời gian khác để xem thêm',
                           )
                         : ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 8,
+                            ),
                             itemCount: filteredDreams.length,
                             itemBuilder: (context, index) {
                               final dream = filteredDreams[index];
                               return DreamCard(
                                 dream: dream,
-                                onTap: () => context.push('${AppRoutes.dreamDetail}/${dream.id}'),
+                                onTap: () => context.push(
+                                  '${AppRoutes.dreamDetail}/${dream.id}',
+                                ),
                               );
                             },
                           ),
@@ -122,7 +135,10 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                             message: 'Hãy kích hoạt theo dõi ngủ mỗi đêm để ghi lại nhật ký',
                           )
                         : ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 8,
+                            ),
                             itemCount: filteredSessions.length,
                             itemBuilder: (context, index) {
                               final session = filteredSessions[index];
@@ -136,14 +152,20 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                                 ),
                                 child: Row(
                                   children: [
-                                    SleepQualityIndicator(score: session.qualityScore, size: 54),
+                                    SleepQualityIndicator(
+                                      score: session.qualityScore,
+                                      size: 54,
+                                    ),
                                     const SizedBox(width: 16),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            DateFormatter.formatDate(session.startTime),
+                                            DateFormatter.formatDate(
+                                              session.startTime,
+                                            ),
                                             style: const TextStyle(
                                               fontSize: 15,
                                               fontWeight: FontWeight.bold,
@@ -162,10 +184,13 @@ class _HistoryScreenState extends State<HistoryScreen> with SingleTickerProvider
                                       ),
                                     ),
                                     Column(
-                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
                                       children: [
                                         Text(
-                                          DateFormatter.formatDurationMinutes(session.totalMinutes),
+                                          DateFormatter.formatDurationMinutes(
+                                            session.totalMinutes,
+                                          ),
                                           style: const TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.bold,

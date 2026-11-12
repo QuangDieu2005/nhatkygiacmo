@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/routes/app_routes.dart';
@@ -9,12 +10,18 @@ import '../../../providers/auth_provider.dart';
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  Future<void> _handleLogout(BuildContext context, AuthProvider authProvider) async {
+  Future<void> _handleLogout(
+    BuildContext context,
+    AuthProvider authProvider,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text('Đăng xuất', style: TextStyle(color: AppColors.textPrimary)),
+        title: const Text(
+          'Đăng xuất',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
         content: const Text(
           'Bạn có chắc chắn muốn đăng xuất khỏi ứng dụng không?',
           style: TextStyle(color: AppColors.textSecondary),
@@ -22,7 +29,10 @@ class ProfileScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Hủy', style: TextStyle(color: AppColors.textSecondary)),
+            child: const Text(
+              'Hủy',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -63,9 +73,7 @@ class ProfileScreen extends StatelessWidget {
         ],
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.nightSkyGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -145,15 +153,23 @@ class ProfileScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        runSpacing: 8,
                         children: [
                           const Text(
                             'Thời lượng ngủ mục tiêu:',
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 14,
+                            ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: AppColors.primary.withOpacity(0.18),
                               borderRadius: BorderRadius.circular(10),
@@ -193,9 +209,24 @@ class ProfileScreen extends StatelessWidget {
                     children: [
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        secondary: const Icon(Icons.notifications_active_outlined, color: AppColors.primaryLight),
-                        title: const Text('Nhắc nhở giờ ngủ', style: TextStyle(color: AppColors.textPrimary, fontSize: 15)),
-                        subtitle: const Text('Nhận thông báo khi đến giờ ngủ lý tưởng', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                        secondary: const Icon(
+                          Icons.notifications_active_outlined,
+                          color: AppColors.primaryLight,
+                        ),
+                        title: const Text(
+                          'Nhắc nhở giờ ngủ',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'Nhận thông báo khi đến giờ ngủ lý tưởng',
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
                         value: notificationsEnabled,
                         activeColor: AppColors.primary,
                         onChanged: (val) {
@@ -205,24 +236,72 @@ class ProfileScreen extends StatelessWidget {
                       const Divider(),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.dark_mode_outlined, color: AppColors.primaryLight),
-                        title: const Text('Giao diện ban đêm (Dark Theme)', style: TextStyle(color: AppColors.textPrimary, fontSize: 15)),
-                        subtitle: const Text('Tối ưu hóa ánh sáng dịu mắt cho ban đêm', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                        trailing: const Icon(Icons.check_rounded, color: AppColors.success),
+                        leading: const Icon(
+                          Icons.dark_mode_outlined,
+                          color: AppColors.primaryLight,
+                        ),
+                        title: const Text(
+                          'Giao diện ban đêm (Dark Theme)',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'Tối ưu hóa ánh sáng dịu mắt cho ban đêm',
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                        trailing: const Icon(
+                          Icons.check_rounded,
+                          color: AppColors.success,
+                        ),
                       ),
                       const Divider(),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.language_rounded, color: AppColors.primaryLight),
-                        title: const Text('Ngôn ngữ', style: TextStyle(color: AppColors.textPrimary, fontSize: 15)),
-                        trailing: const Text('Tiếng Việt', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+                        leading: const Icon(
+                          Icons.language_rounded,
+                          color: AppColors.primaryLight,
+                        ),
+                        title: const Text(
+                          'Ngôn ngữ',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                          ),
+                        ),
+                        trailing: const Text(
+                          'Tiếng Việt',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
                       ),
                       const Divider(),
                       ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.info_outline_rounded, color: AppColors.primaryLight),
-                        title: const Text('Phiên bản ứng dụng', style: TextStyle(color: AppColors.textPrimary, fontSize: 15)),
-                        trailing: const Text(AppConstants.appVersion, style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
+                        leading: const Icon(
+                          Icons.info_outline_rounded,
+                          color: AppColors.primaryLight,
+                        ),
+                        title: const Text(
+                          'Phiên bản ứng dụng',
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                          ),
+                        ),
+                        trailing: const Text(
+                          AppConstants.appVersion,
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 14,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -230,23 +309,33 @@ class ProfileScreen extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 // Nút Đăng xuất
-                ListTile(
-                  tileColor: AppColors.surface,
+                Material(
+                  color: AppColors.surface,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                     side: const BorderSide(color: AppColors.divider),
                   ),
-                  leading: const Icon(Icons.logout_rounded, color: AppColors.error),
-                  title: const Text(
-                    'Đăng xuất',
-                    style: TextStyle(
+                  clipBehavior: Clip.antiAlias,
+                  child: ListTile(
+                    leading: const Icon(
+                      Icons.logout_rounded,
                       color: AppColors.error,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
                     ),
+                    title: const Text(
+                      'Đăng xuất',
+                      style: TextStyle(
+                        color: AppColors.error,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    trailing: const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 16,
+                      color: AppColors.textMuted,
+                    ),
+                    onTap: () => _handleLogout(context, authProvider),
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.textMuted),
-                  onTap: () => _handleLogout(context, authProvider),
                 ),
                 const SizedBox(height: 28),
               ],
@@ -265,20 +354,23 @@ class ProfileScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.divider),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+      child: Material(
+        color: Colors.transparent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
             ),
-          ),
-          const SizedBox(height: 14),
-          child,
-        ],
+            const SizedBox(height: 14),
+            child,
+          ],
+        ),
       ),
     );
   }
