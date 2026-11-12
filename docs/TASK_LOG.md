@@ -247,3 +247,13 @@
 - Tests: added `test/auth_ui_test.dart` with 13 widget tests for empty login, validation, password visibility, loading/deduplication across all three forms, failed login/register staying off Home, registration not treated as verified, forgot-password validation/success/failure disclosure, and 320x420 keyboard-inset layouts. Focused auth test: 13/13 passed. Full `flutter test --reporter expanded`: 47/47 passed.
 - Checks: formatter check on 7 changed Dart files passed (0 changed). `flutter analyze --no-pub` completed with 101 info diagnostics, 0 warnings, 0 errors; exit code 1 due infos. `git diff --check` result recorded after this entry.
 - Scope: no route, model, API contract, backend, database, schema, RLS or Supabase changes; no package added; no `.env` access; no commit or push.
+
+## 2026-11-13 - Đợt 7D: Kiểm toán trước tích hợp Supabase
+
+- Audit read-only toàn bộ luồng Flutter/auth/dream/sleep/analytics/profile, Express routes/middleware/Supabase client, schema SQL và tài liệu contract. Không mở `.env` hoặc `server/.env`; chỉ kiểm tra metadata file tồn tại/tracked và tên biến trong `.env.example`. Không gọi Supabase, không chạy server/migration, không sửa source/SQL/database.
+- Findings quan trọng được ghi trong `docs/PRE_INTEGRATION_AUDIT.md`: Flutter hiện dùng fixtures/in-memory, chưa gọi REST; API client cấu hình localhost:5000 trong khi Express mặc định 3000 và không gắn bearer; auth mock lưu token SharedPreferences, thiếu refresh/route guard/server logout; `pubspec.yaml` liệt kê `.env` làm asset và `.env` hiện tồn tại (untracked); Dream/Sleep model, API route và schema legacy lệch UUID/field/type so với contract; endpoint forgot/reset chưa có. Backend dùng verified `req.user.id` và owner filter; RLS owner policies bật. Report chia P0/P1/P2 và roadmap.
+- `flutter --version`: Flutter 3.47.0 stable, Dart 3.13.0.
+- `flutter analyze --no-pub`: hoàn tất, 101 issues (0 warning, 0 error, 101 info), exit 1 do còn analyzer infos.
+- `flutter test --reporter expanded`: 47/47 passed, exit 0.
+- `git diff --check`: PASS, exit 0 sau khi cập nhật tài liệu; Git chỉ cảnh báo `TASK_LOG.md` có LF sẽ được chuyển CRLF ở lần Git ghi tiếp theo.
+- Chưa chạy backend/Node test, không có xác minh kết nối Supabase, không chạy trên thiết bị thật/emulator và không thực hiện kiểm thử bảo mật xâm nhập. Chỉ `docs/PRE_INTEGRATION_AUDIT.md` và entry này được phép thay đổi trong đợt.
