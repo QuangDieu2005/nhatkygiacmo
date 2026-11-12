@@ -72,3 +72,11 @@
 - File sửa: `lib/features/dream_diary/presentation/dream_detail_screen.dart`, `docs/TASK_LOG.md`.
 - `dart format lib/features/dream_diary/presentation/dream_detail_screen.dart` và `flutter analyze --no-pub` đều không phản hồi sau 30 giây; đã dừng, chưa có kết quả pass/fail. Không chạy ứng dụng; runtime layout chưa được xác minh.
 - `git diff --check` được chạy sau khi ghi log. Không sửa model/provider/repository/routes, backend, Supabase, SQL schema hay database.
+
+## 2026-11-12 — Đợt 5: thiết kế lại Analytics giấc ngủ
+
+- Đọc yêu cầu Đợt 5, hướng dẫn dự án, context/plan/data contract/task log, theme/màu sắc; rà soát AnalyticsScreen, SleepProvider, SleepRepository, SleepSessionModel, SleepStatisticsModel và route GoRouter. Analytics hiện ở `/analytics`; route/Provider không đổi.
+- Thiết kế lại `analytics_screen.dart` theo Night Sky: header giới thiệu, lưới chỉ số responsive, biểu đồ cột thời lượng, biểu đồ điểm chất lượng 0–100, biểu đồ tròn giai đoạn ngủ và ghi nhận dữ liệu đơn giản.
+- Các chỉ số hiện được tính từ danh sách phiên ngủ đã hoàn tất: thời lượng trung bình, điểm chất lượng trung bình, số đêm, phiên dài nhất. Biểu đồ dùng tối đa 7 ngày có bản ghi; giai đoạn ngủ chỉ tổng hợp các phiên có số phút stage được ghi nhận. Loading/empty state và pull-to-refresh được giữ trong phạm vi khả năng của Provider. Không thêm chẩn đoán hay nhận định sức khỏe.
+- Không sửa model, repository, Provider, route, dependency, backend, Supabase, schema hoặc database; không thêm package. Không commit/push.
+- Kiểm tra: `dart format lib/features/analytics/presentation/analytics_screen.dart` và `flutter analyze --no-pub` đều không có output sau 30 giây, đã dừng theo yêu cầu; chưa xác minh được kết quả format/analyze hoặc layout runtime. Provider chưa expose error state nên UI không thể phân biệt lỗi tải với dữ liệu rỗng. `git diff --check` hoàn tất, không phát hiện whitespace error (chỉ có cảnh báo Git về chuyển LF sang CRLF).
