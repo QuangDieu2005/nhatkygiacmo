@@ -1,14 +1,8 @@
 import 'package:flutter/material.dart';
 
-enum EmotionType {
-  happy,
-  peaceful,
-  excited,
-  sad,
-  scared,
-  confused,
-  neutral,
-}
+import 'api_contract.dart';
+
+enum EmotionType { happy, peaceful, excited, sad, scared, confused, neutral }
 
 extension EmotionTypeExtension on EmotionType {
   String get label {
@@ -135,6 +129,43 @@ class DreamModel {
     };
   }
 
+  /// Writable API fields only. Server-owned metadata is intentionally omitted.
+  Map<String, dynamic> toApiWriteJson() => {
+    'title': title,
+    'content': content,
+    'emotion': emotion.name,
+    'tags': List<String>.of(tags),
+    'clarity_score': clarityScore,
+    'is_lucid': isLucid,
+    'dream_date': ApiContract.serializeDateOnly(dreamDate),
+  };
+
+  factory DreamModel.fromApiJson(Map<String, dynamic> json) {
+    final emotionName = ApiContract.requiredString(json, 'emotion');
+    final emotion = EmotionType.values.where(
+      (value) => value.name == emotionName,
+    );
+    if (emotion.isEmpty) throw FormatException('Unsupported dream emotion.');
+
+    final clarityScore = ApiContract.requiredInt(json, 'clarity_score');
+    if (clarityScore < 1 || clarityScore > 5) {
+      throw FormatException('Invalid clarity_score value.');
+    }
+
+    return DreamModel(
+      id: ApiContract.requiredUuid(json, 'id'),
+      userId: ApiContract.requiredUuid(json, 'user_id'),
+      title: ApiContract.requiredString(json, 'title'),
+      content: ApiContract.requiredString(json, 'content'),
+      emotion: emotion.first,
+      tags: ApiContract.requiredStringList(json, 'tags'),
+      clarityScore: clarityScore,
+      isLucid: ApiContract.requiredBool(json, 'is_lucid'),
+      dreamDate: ApiContract.requiredDateOnly(json, 'dream_date'),
+      createdAt: ApiContract.requiredZonedTimestamp(json, 'created_at'),
+    );
+  }
+
   factory DreamModel.fromJson(Map<String, dynamic> json) {
     return DreamModel(
       id: json['id'] as String,
@@ -145,7 +176,9 @@ class DreamModel {
         (e) => e.name == (json['emotion'] as String?),
         orElse: () => EmotionType.neutral,
       ),
-      tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      tags:
+          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+          [],
       clarityScore: (json['clarity_score'] as num?)?.toInt() ?? 3,
       isLucid: json['is_lucid'] as bool? ?? false,
       dreamDate: json['dream_date'] != null

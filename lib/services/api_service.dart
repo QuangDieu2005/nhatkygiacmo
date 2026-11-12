@@ -28,7 +28,11 @@ class ApiService {
     };
   }
 
-  Future<Map<String, dynamic>> register(String email, String password, String name) async {
+  Future<Map<String, dynamic>> register(
+    String email,
+    String password,
+    String name,
+  ) async {
     // TODO: Khi nối Backend Node.js thực tế:
     // final response = await _client.post('/auth/register', data: {'email': email, 'password': password, 'name': name});
     // return response.data;
@@ -48,23 +52,25 @@ class ApiService {
   Future<List<DreamModel>> fetchDreams() async {
     // TODO: Gọi API REST khi backend sẵn sàng:
     // final response = await _client.get('/dreams');
-    // return (response.data as List).map((e) => DreamModel.fromJson(e)).toList();
+    // return (response.data as List).map((e) => DreamModel.fromApiJson(e)).toList();
     return [];
   }
 
   Future<DreamModel> createDream(DreamModel dream) async {
-    // TODO: await _client.post('/dreams', data: dream.toJson());
+    // TODO: POST /dreams with dream.toApiWriteJson(), then parse
+    // DreamModel.fromApiJson(response.data). This remains a local stub.
     return dream;
   }
 
-  // Sleep sessions API endpoints
+  // Sleep record API endpoint stubs. Local tracking snapshots keep toJson().
   Future<List<SleepSessionModel>> fetchSleepSessions() async {
-    // TODO: await _client.get('/sleep-sessions');
+    // TODO: GET /sleep-records and parse with SleepSessionModel.fromApiJson.
     return [];
   }
 
   Future<SleepSessionModel> syncSleepSession(SleepSessionModel session) async {
-    // TODO: await _client.post('/sleep-sessions', data: session.toJson());
+    // TODO: POST /sleep-records with session.toApiWriteJson(), then parse
+    // SleepSessionModel.fromApiJson(response.data). Do not send local JSON.
     return session;
   }
 }

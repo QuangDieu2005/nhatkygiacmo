@@ -1,70 +1,117 @@
 import { Router } from 'express';
-import { adminClient } from '../supabase.js';
+import {
+  ApiError,
+  DREAM_EMOTIONS,
+  buildDreamPayload,
+  requireDateOnly,
+  requireUuid,
+} from '../validation.js';
 
-const router = Router();
-const fields = ['title', 'content', 'emotion', 'tags'];
-function validate(body, res) {
-  for (const field of ['title', 'content', 'emotion']) {
-    if (typeof body[field] !== 'string' || !body[field].trim()) {
-      res.status(400).json({ message: `Trường ${field} không được để trống.` });
-      return false;
-    }
+function requireQueryString(value, field) {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new ApiError(400, 'VALIDATION_ERROR', `Tham số ${field} không hợp lệ.`);
   }
-  if (body.title.length > 180 || body.content.length > 20000) {
-    res.status(400).json({ message: 'Tiêu đề hoặc nội dung vượt quá giới hạn.' });
-    return false;
-  }
-  return true;
+  return value.trim();
 }
 
-router.get('/', async (req, res, next) => {
-  try {
-    let query = adminClient.from('dreams').select('*').eq('user_id', req.user.id);
-    if (req.query.emotion) query = query.eq('emotion', String(req.query.emotion));
-    if (req.query.q) {
-      const q = String(req.query.q).replace(/[,%()]/g, ' ').trim();
-      if (q) query = query.or(`title.ilike.%${q}%,content.ilike.%${q}%,tags.ilike.%${q}%`);
+export function createDreamsRouter(database) {
+  const router = Router();
+
+  router.get('/', async (req, res, next) => {
+    try {
+      let query = database.from('dreams').select('*').eq('user_id', req.user.id);
+
+      if (req.query.emotion !== undefined) {
+        const emotion = requireQueryString(req.query.emotion, 'emotion');
+        if (!DREAM_EMOTIONS.has(emotion)) {
+          throw new ApiError(400, 'VALIDATION_ERROR', 'Cảm xúc giấc mơ không hợp lệ.');
+        }
+        query = query.eq('emotion', emotion);
+      }
+      if (req.query.q !== undefined) {
+        const q = requireQueryString(req.query.q, 'q').replace(/[,.%*()\\]/g, ' ').trim();
+        if (q) query = query.or(`title.ilike.%${q}%,content.ilike.%${q}%`);
+      }
+      if (req.query.tag !== undefined) {
+        const tag = requireQueryString(req.query.tag, 'tag');
+        query = query.contains('tags', [tag]);
+      }
+
+      const from = req.query.from === undefined
+        ? null
+        : requireDateOnly(requireQueryString(req.query.from, 'from'), 'from');
+      const to = req.query.to === undefined
+        ? null
+        : requireDateOnly(requireQueryString(req.query.to, 'to'), 'to');
+      if (from && to && from > to) {
+        throw new ApiError(400, 'VALIDATION_ERROR', 'Khoảng ngày lọc không hợp lệ.');
+      }
+      if (from) query = query.gte('dream_date', from);
+      if (to) query = query.lte('dream_date', to);
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) throw error;
+      return res.json(data ?? []);
+    } catch (error) {
+      return next(error);
     }
-    const { data, error } = await query.order('created_at', { ascending: false });
-    if (error) throw error;
-    res.json(data ?? []);
-  } catch (error) { next(error); }
-});
+  });
 
-router.post('/', async (req, res, next) => {
-  try {
-    if (!validate(req.body, res)) return;
-    const payload = Object.fromEntries(fields.map((key) => [key, req.body[key] ?? '']));
-    payload.user_id = req.user.id;
-    const { data, error } = await adminClient.from('dreams').insert(payload).select('*').single();
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (error) { next(error); }
-});
+  router.post('/', async (req, res, next) => {
+    try {
+      const payload = buildDreamPayload(req.body, req.user.id);
+      const { data, error } = await database
+        .from('dreams')
+        .insert(payload)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return res.status(201).json(data);
+    } catch (error) {
+      return next(error);
+    }
+  });
 
-router.patch('/:id', async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: 'ID không hợp lệ.' });
-    if (!validate(req.body, res)) return;
-    const payload = Object.fromEntries(fields.map((key) => [key, req.body[key] ?? '']));
-    const { data, error } = await adminClient.from('dreams').update(payload)
-      .eq('id', id).eq('user_id', req.user.id).select('*').maybeSingle();
-    if (error) throw error;
-    if (!data) return res.status(404).json({ message: 'Không tìm thấy nhật ký.' });
-    res.json(data);
-  } catch (error) { next(error); }
-});
+  router.patch('/:id', async (req, res, next) => {
+    try {
+      const id = requireUuid(req.params.id);
+      const payload = buildDreamPayload(req.body, req.user.id);
+      const { data, error } = await database
+        .from('dreams')
+        .update(payload)
+        .eq('id', id)
+        .eq('user_id', req.user.id)
+        .select('*')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        throw new ApiError(404, 'NOT_FOUND', 'Không tìm thấy nhật ký.');
+      }
+      return res.json(data);
+    } catch (error) {
+      return next(error);
+    }
+  });
 
-router.delete('/:id', async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: 'ID không hợp lệ.' });
-    const { data, error } = await adminClient.from('dreams').delete()
-      .eq('id', id).eq('user_id', req.user.id).select('id').maybeSingle();
-    if (error) throw error;
-    if (!data) return res.status(404).json({ message: 'Không tìm thấy nhật ký.' });
-    res.status(204).end();
-  } catch (error) { next(error); }
-});
-export default router;
+  router.delete('/:id', async (req, res, next) => {
+    try {
+      const id = requireUuid(req.params.id);
+      const { data, error } = await database
+        .from('dreams')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', req.user.id)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        throw new ApiError(404, 'NOT_FOUND', 'Không tìm thấy nhật ký.');
+      }
+      return res.status(204).end();
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  return router;
+}

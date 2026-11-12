@@ -26,7 +26,7 @@
 - `user_id uuid not null references auth.users(id) on delete cascade`.
 - `start_time timestamptz not null`; `end_time timestamptz` (nullable chỉ khi nghiệp vụ cho phép draft server-side; bản đầu khuyến nghị chỉ lưu completed nên NOT NULL).
 - `duration_minutes integer not null check (duration_minutes between 0 and 1440)` nếu chỉ completed records.
-- `quality_score smallint` (quyết định nullable cần chốt), check `0..100` khi có giá trị.
+- `quality_score smallint not null default 75 check (quality_score between 0 and 100)`. Write API và Flutter domain hiện yêu cầu số nguyên không nullable; giá trị mặc định 75 khớp `SleepSessionModel` khi caller không cung cấp.
 - `deep_sleep_minutes`, `light_sleep_minutes`, `rem_sleep_minutes integer not null default 0 check >= 0`.
 - `notes text not null default ''`.
 - `created_at timestamptz not null default now()`.
@@ -72,7 +72,15 @@ Giữ RLS bật trên bảng. Policy cho authenticated owner `auth.uid() = user_
 - Có dữ liệu thật trong các bảng hiện hữu không, format timezone của sleep text là gì?
 - Có app/backend client đã phát hành dùng bigint/legacy columns không?
 - Chọn `end_time NOT NULL` và chỉ sync phiên hoàn tất hay cần draft đa thiết bị?
-- `quality_score` nullable hay luôn bắt buộc? Quy tắc duration đã thống nhất: server tính từ timestamp, client không gửi.
+- Quality dùng NOT NULL/default 75 theo contract source Đợt 8A.2. Quy tắc duration: server tính từ timestamp, client không gửi.
 - Định dạng/tag delimiter dữ liệu cũ và có dấu phẩy bên trong tag không?
 
 Không suy đoán các điểm này; cần inventory và quyết định trước khi viết migration executable.
+
+## Source contract cập nhật — Đợt 8A.2 (migration vẫn chưa thực thi)
+
+- Express routes hiện nhắm tới schema đích: UUID `id`, `dreams.tags text[]`, dream `clarity_score/is_lucid/dream_date`, sleep `start_time/end_time/quality_score/stage fields/notes`. Đây là thay đổi source tương thích hợp đồng mới, **không tương thích schema SQL legacy hiện tại**.
+- Giữ ID dạng chuỗi UUID trong Flutter/JSON. Tuyệt đối không cast bigint cũ trực tiếp thành UUID. Nếu có dữ liệu cần giữ: thêm UUID shadow column, tạo mapping ổn định cho từng hàng, kiểm tra unique/null/FK và owner; inventory mọi consumer/FK trước khi đổi khóa.
+- Migration phải versioned và được review/phê duyệt riêng; backup và thử restore trước staging; ghi nhận số lượng hàng và lỗi chuyển đổi trước/sau; giữ cột legacy trong giai đoạn dual-read/compatibility; có kế hoạch rollback dựa trên backup/dual columns; xác minh RLS, grants và multi-user owner isolation sau migration.
+- `tags text` sang `text[]` cần xác định delimiter và xử lý tag chứa dấu phân cách; không parse phỏng đoán. Sleep legacy text time cần inventory timezone/format từng dữ liệu trước chuyển TIMESTAMPTZ. Stage cũ không có dữ liệu thì không thể khôi phục bằng backfill.
+- Quality score API/model nay là integer bắt buộc 0–100, schema đích NOT NULL default 75. Mapping dữ liệu legacy `quality` 1–10 cần quyết định nghiệp vụ, không tự nhân 10. Không có migration executable nào được tạo trong Đợt 8A.2.

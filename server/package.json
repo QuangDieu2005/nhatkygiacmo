@@ -4,7 +4,11 @@
   "private": true,
   "description": "REST API backend for Dream Diary Flutter app",
   "type": "module",
-  "scripts": {"start": "node src/server.js", "dev": "node --watch src/server.js"},
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node test/api_contract.test.js"
+  },
   "engines": {"node": ">=20"},
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

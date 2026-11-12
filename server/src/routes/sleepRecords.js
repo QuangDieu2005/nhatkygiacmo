@@ -1,78 +1,105 @@
 import { Router } from 'express';
-import { adminClient } from '../supabase.js';
+import {
+  ApiError,
+  buildSleepPayload,
+  isDateOnly,
+  requireUuid,
+} from '../validation.js';
 
-const router = Router();
-const fields = ['sleep_time', 'wake_time', 'duration_minutes', 'quality', 'note'];
-function validate(body, res) {
-  if (typeof body.sleep_time !== 'string' || !body.sleep_time.trim() ||
-      typeof body.wake_time !== 'string' || !body.wake_time.trim()) {
-    res.status(400).json({ message: 'Vui lòng nhập giờ ngủ và giờ thức dậy.' }); return false;
+function dateQuery(value, field) {
+  if (typeof value !== 'string' || !isDateOnly(value)) {
+    throw new ApiError(400, 'VALIDATION_ERROR', `${field} phải theo định dạng YYYY-MM-DD.`);
   }
-  const duration = Number(body.duration_minutes);
-  const quality = Number(body.quality);
-  if (!Number.isInteger(duration) || duration < 0 || duration > 1440) {
-    res.status(400).json({ message: 'Thời lượng ngủ không hợp lệ.' }); return false;
-  }
-  if (!Number.isInteger(quality) || quality < 1 || quality > 10) {
-    res.status(400).json({ message: 'Chất lượng ngủ phải từ 1 đến 10.' }); return false;
-  }
-  return true;
-}
-function payloadFrom(body, userId) {
-  return {
-    sleep_time: body.sleep_time,
-    wake_time: body.wake_time,
-    duration_minutes: Number(body.duration_minutes),
-    quality: Number(body.quality),
-    note: body.note ?? '',
-    ...(userId ? { user_id: userId } : {}),
-  };
+  return value;
 }
 
-router.get('/', async (req, res, next) => {
-  try {
-    const days = Math.min(Math.max(Number(req.query.days) || 90, 1), 3650);
-    const since = new Date(Date.now() - days * 86400000).toISOString();
-    const { data, error } = await adminClient.from('sleep_records').select('*')
-      .eq('user_id', req.user.id).gte('created_at', since)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    res.json(data ?? []);
-  } catch (error) { next(error); }
-});
+export function createSleepRecordsRouter(database) {
+  const router = Router();
 
-router.post('/', async (req, res, next) => {
-  try {
-    if (!validate(req.body, res)) return;
-    const { data, error } = await adminClient.from('sleep_records')
-      .insert(payloadFrom(req.body, req.user.id)).select('*').single();
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (error) { next(error); }
-});
+  router.get('/', async (req, res, next) => {
+    try {
+      const from = req.query.from === undefined ? null : dateQuery(req.query.from, 'from');
+      const to = req.query.to === undefined ? null : dateQuery(req.query.to, 'to');
+      if (from && to && from > to) {
+        throw new ApiError(400, 'VALIDATION_ERROR', 'Khoảng ngày lọc không hợp lệ.');
+      }
 
-router.patch('/:id', async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: 'ID không hợp lệ.' });
-    if (!validate(req.body, res)) return;
-    const { data, error } = await adminClient.from('sleep_records').update(payloadFrom(req.body))
-      .eq('id', id).eq('user_id', req.user.id).select('*').maybeSingle();
-    if (error) throw error;
-    if (!data) return res.status(404).json({ message: 'Không tìm thấy bản ghi giấc ngủ.' });
-    res.json(data);
-  } catch (error) { next(error); }
-});
+      let query = database.from('sleep_records').select('*').eq('user_id', req.user.id);
+      if (from || to) {
+        if (from) query = query.gte('start_time', `${from}T00:00:00.000Z`);
+        if (to) query = query.lte('start_time', `${to}T23:59:59.999Z`);
+      } else {
+        const daysValue = req.query.days === undefined ? 90 : Number(req.query.days);
+        if (!Number.isInteger(daysValue) || daysValue < 1 || daysValue > 3650) {
+          throw new ApiError(400, 'VALIDATION_ERROR', 'days phải là số nguyên từ 1 đến 3650.');
+        }
+        const since = new Date(Date.now() - daysValue * 86400000).toISOString();
+        query = query.gte('created_at', since);
+      }
 
-router.delete('/:id', async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ message: 'ID không hợp lệ.' });
-    const { data, error } = await adminClient.from('sleep_records').delete()
-      .eq('id', id).eq('user_id', req.user.id).select('id').maybeSingle();
-    if (error) throw error;
-    if (!data) return res.status(404).json({ message: 'Không tìm thấy bản ghi giấc ngủ.' });
-    res.status(204).end();
-  } catch (error) { next(error); }
-});
-export default router;
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) throw error;
+      return res.json(data ?? []);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.post('/', async (req, res, next) => {
+    try {
+      const payload = buildSleepPayload(req.body, req.user.id);
+      const { data, error } = await database
+        .from('sleep_records')
+        .insert(payload)
+        .select('*')
+        .single();
+      if (error) throw error;
+      return res.status(201).json(data);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.patch('/:id', async (req, res, next) => {
+    try {
+      const id = requireUuid(req.params.id);
+      const payload = buildSleepPayload(req.body, req.user.id);
+      const { data, error } = await database
+        .from('sleep_records')
+        .update(payload)
+        .eq('id', id)
+        .eq('user_id', req.user.id)
+        .select('*')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        throw new ApiError(404, 'NOT_FOUND', 'Không tìm thấy bản ghi giấc ngủ.');
+      }
+      return res.json(data);
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  router.delete('/:id', async (req, res, next) => {
+    try {
+      const id = requireUuid(req.params.id);
+      const { data, error } = await database
+        .from('sleep_records')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', req.user.id)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        throw new ApiError(404, 'NOT_FOUND', 'Không tìm thấy bản ghi giấc ngủ.');
+      }
+      return res.status(204).end();
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  return router;
+}

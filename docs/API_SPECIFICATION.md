@@ -1,69 +1,68 @@
-# API Specification â€” há»£p Ä‘á»“ng má»¥c tiÃªu
+# API Specification — Dream Diary
 
-**Base URL:** `{API_BASE_URL}` trá» tá»›i origin backend, vÃ­ dá»¥ `http://<host>:3000/api`. CÃ¡c response thÃ nh cÃ´ng dÃ¹ng JSON trá»« khi ghi 204. ÄÃ¢y lÃ  Ä‘áº·c táº£ Ä‘á» xuáº¥t theo `DATA_CONTRACT.md`; backend hiá»‡n chÆ°a triá»ƒn khai toÃ n bá»™ há»£p Ä‘á»“ng. KhÃ´ng Ä‘á»“ng nghÄ©a endpoint Ä‘Ã£ Ä‘Æ°á»£c kiá»ƒm thá»­.
+**Trạng thái:** Hợp đồng source code được chuẩn hóa ở Đợt 8A.2; chưa kết nối Supabase thật. Schema SQL hiện tại vẫn là schema legacy và cần migration được phê duyệt trước khi chạy routes nghiệp vụ với database thật.
 
-## Quy Æ°á»›c báº£o vá»‡
+**Base URL:** `{API_BASE_URL}` trỏ tới origin backend, ví dụ `http://<host>:3000/api`. API hiện không dùng pagination envelope: GET list trả JSON array trực tiếp; có thể mở rộng pagination bằng thay đổi contract/version tương thích sau này.
 
-- Auth routes nháº­n HTTPS trong mÃ´i trÆ°á»ng deploy. Dream/sleep cáº§n `Authorization: Bearer <access_token>`.
-- Express xÃ¡c minh token vá»›i Supabase Auth (`auth.getUser(token)` nhÆ° middleware hiá»‡n táº¡i). Má»i truy váº¥n dÃ¹ng `req.user.id`; bá» qua/reject `user_id` do body cung cáº¥p. UUID record khÃ´ng Ä‘Æ°á»£c dÃ¹ng thay kiá»ƒm tra owner.
-- Response lá»—i chuáº©n: `{ "message": "...", "code": "..." }`. MÃ£ chung: 400 validation, 401 token thiáº¿u/háº¿t háº¡n/khÃ´ng há»£p lá»‡, 403 cáº¥m, 404 khÃ´ng tá»“n táº¡i hoáº·c khÃ´ng thuá»™c user, 409 conflict náº¿u cÃ³, 429 rate limit, 500 lá»—i ná»™i bá»™, 502/503 phá»¥ thuá»™c dá»‹ch vá»¥ upstream.
+## Quy ước chung
 
-## Auth
+- API nghiệp vụ yêu cầu `Authorization: Bearer <Supabase access_token>` qua Express middleware xác minh token với Supabase Auth.
+- Owner chỉ lấy từ `req.user.id` của JWT đã xác minh. Body `user_id` bị từ chối; mọi GET/update/delete đều có filter owner.
+- Record ID trên path và DTO là UUID dạng chuỗi. Server/database sinh ID và `created_at`; client không được ghi các trường này.
+- Request body không nhận field ngoài contract, bao gồm `id`, `user_id`, `created_at`, `duration_minutes`, `isTracking`/`is_tracking`.
+- Lỗi dùng `{ "message": string, "code": string }`. Validation/path lỗi trả 400; thiếu hoặc sai token 401; record không tồn tại/không thuộc user 404; lỗi nội bộ trả thông báo chung 500 `INTERNAL_ERROR`, không trả lỗi Supabase hoặc stack.
 
-| Method + URL | Body | ThÃ nh cÃ´ng | Auth | Lá»—i dá»± kiáº¿n |
+## Authentication
+
+Auth routes giữ nguyên trong Đợt 8A.2.
+
+| Method + URL | Request | Response thành công | Auth | Lỗi dự kiến |
 |---|---|---|---|---|
-| POST `/auth/register` | `{ "email": string, "password": string, "name": string }` | `201` náº¿u session cÃ³: `{ "user": UserDTO, "session": SessionDTO, "confirmation_required": false }`; `202` náº¿u cáº§n email confirm: `{ "user": UserDTO|null, "session": null, "confirmation_required": true }` | KhÃ´ng | 400 validation, 409 email Ä‘Ã£ dÃ¹ng (hoáº·c 400 tá»« upstream theo chuáº©n hÃ³a), 429, 502/503 |
-| POST `/auth/login` | `{ "email": string, "password": string }` | `200 { "user": UserDTO, "session": SessionDTO, "confirmation_required": false }` | KhÃ´ng | 400, 401 thÃ´ng tin sai/chÆ°a xÃ¡c nháº­n (phÃ¢n biá»‡t theo chÃ­nh sÃ¡ch khÃ´ng tiáº¿t lá»™ email tá»“n táº¡i), 429, 502/503 |
-| POST `/auth/refresh` | `{ "refresh_token": string }` | `200 { "user": UserDTO, "session": SessionDTO }` (token má»›i; thay toÃ n bá»™ session cÅ©) | KhÃ´ng; refresh token trong body | 400, 401/400 refresh bá»‹ thu há»“i/háº¿t háº¡n, 429, 502/503 |
-| POST `/auth/logout` | khÃ´ng cÃ³ | `204` | CÃ³; Bearer access token | 401, 429, 502/503 |
-| POST `/auth/forgot-password` **Ä‘á» xuáº¥t má»›i** | `{ "email": string }` | `202 { "message": "Náº¿u Ä‘á»‹a chá»‰ há»£p lá»‡, hÆ°á»›ng dáº«n sáº½ Ä‘Æ°á»£c gá»­i." }` | KhÃ´ng | 400, 429, 502/503; response khÃ´ng tiáº¿t lá»™ email cÃ³ tÃ i khoáº£n |
-| POST `/auth/reset-password` **Ä‘á» xuáº¥t má»›i** | `{ "access_token": string, "new_password": string }` hoáº·c code má»™t láº§n Ä‘Ã£ Ä‘á»•i thÃ nh session/token theo flow Supabase Ä‘Æ°á»£c chá»n | `200 { "message": "Máº­t kháº©u Ä‘Ã£ Ä‘Æ°á»£c cáº­p nháº­t." }` | XÃ¡c thá»±c báº±ng recovery credential; flow pháº£i chá»‘t | 400, 401, 429, 502/503 |
+| POST `/auth/register` | `{ "email": string, "password": string, "name": string }` | `201 { user, session, confirmation_required:false }` nếu có session; `202 { user|null, session:null, confirmation_required:true }` nếu cần email confirmation | Không | 400, 409 hoặc upstream 400, 429, 502/503 |
+| POST `/auth/login` | `{ "email": string, "password": string }` | `200 { user, session }` | Không | 400, 401, 429, 502/503 |
+| POST `/auth/refresh` | `{ "refresh_token": string }` | `200 { user, session }` với session mới | Không | 400, 401, 429, 502/503 |
+| POST `/auth/logout` | Không có body | `204` | Bearer access token | 401, 429, 502/503 |
+| POST `/auth/forgot-password` | `{ "email": string }` | `202 { "message": string }` (đề xuất; chưa triển khai) | Không | 400, 429, 502/503 |
+| POST `/auth/reset-password` | Recovery credential theo flow được chọn (đề xuất; chưa triển khai) | `200 { "message": string }` | Recovery credential | 400, 401, 429, 502/503 |
 
-`UserDTO` tá»‘i thiá»ƒu: `{ "id": UUID, "email": string, "name": string|null, "avatar_url": string|null, "created_at": timestamp }`. `SessionDTO`: `{ "access_token": string, "refresh_token": string, "token_type": "bearer", "expires_in": number, "expires_at": number|null }`.
+`SessionDTO` dùng các key Supabase: `access_token`, `refresh_token`, `token_type`, `expires_in`, `expires_at`. `UserDTO` tối thiểu gồm `id`, `email`, `name`, `avatar_url`, `created_at`. Flutter phải coi register `session:null` là unauthenticated/pending confirmation, không lưu token và không vào main shell.
 
-**Session null khi Ä‘Äƒng kÃ½:** `202` khÃ´ng pháº£i Ä‘Äƒng nháº­p thÃ nh cÃ´ng. Flutter giá»¯ tráº¡ng thÃ¡i unauthenticated/pending confirmation, hiá»ƒn thá»‹ thÃ´ng bÃ¡o hÆ°á»›ng dáº«n xÃ¡c nháº­n, khÃ´ng lÆ°u token, khÃ´ng vÃ o main shell; ngÆ°á»i dÃ¹ng Ä‘Äƒng nháº­p sau khi xÃ¡c nháº­n. `user` null váº«n pháº£i Ä‘Æ°á»£c xá»­ lÃ½ an toÃ n. Náº¿u `session != null`, coi lÃ  authenticated vÃ  lÆ°u session Ä‘áº§y Ä‘á»§ an toÃ n.
+## Dreams
 
-**KhÃ´i phá»¥c session:** Flutter Ä‘á»c session Ä‘Ã£ lÆ°u trong secure storage; náº¿u access token gáº§n/háº¿t háº¡n, gá»i `/auth/refresh` má»™t láº§n cÃ³ khÃ³a Ä‘á»“ng thá»i, thay access + refresh token nguyÃªn tá»­. Náº¿u refresh lá»—i 401, xÃ³a session vÃ  quay vá» unauthenticated. Má»i request nghiá»‡p vá»¥ dÃ¹ng access token má»›i nháº¥t; náº¿u nháº­n 401 do háº¿t háº¡n, refresh má»™t láº§n rá»“i retry tá»‘i Ä‘a má»™t láº§n. KhÃ´ng retry lá»—i 403/validation. LÆ°u token trong SharedPreferences hiá»‡n táº¡i khÃ´ng Ä‘á»§ báº£o vá»‡; chá»n secure storage theo ná»n táº£ng. Web cáº§n lá»±a chá»n riÃªng (BFF/HttpOnly cookie hoáº·c storage threat model Ä‘Æ°á»£c phÃª duyá»‡t), khÃ´ng giáº£ Ä‘á»‹nh plugin native Ã¡p dá»¥ng nhÆ° nhau.
-
-## Dreams CRUD
-
-| Method + URL | Request | Response | Auth | Lá»—i dá»± kiáº¿n |
+| Method + URL | Request | Response | Auth | Lỗi dự kiến |
 |---|---|---|---|---|
-| GET `/dreams` | query tÃ¹y chá»n: `q` (tÃ¬m title/content), `emotion`, `tag` (khá»›p chÃ­nh xÃ¡c má»™t tag), `from`/`to` (`YYYY-MM-DD`) | `200 [DreamDTO, ...]` â€” JSON array trá»±c tiáº¿p; rá»—ng lÃ  `[]` | CÃ³ | 400 query sai, 401, 429, 500/503 |
-| POST `/dreams` | `{ "title": string, "content": string, "emotion": EmotionType.name, "tags": string[], "clarity_score": 1..5, "is_lucid": boolean, "dream_date": "YYYY-MM-DD" }` | `201 DreamDTO` | CÃ³ | 400 validation, 401, 429, 500/503 |
-| PATCH `/dreams/:id` | UUID path; toÃ n bá»™ writable fields theo Ä‘á» xuáº¥t (partial semantics cáº§n xÃ¡c nháº­n) | `200 DreamDTO` | CÃ³ | 400 UUID/validation, 401, 404, 429, 500/503 |
-| DELETE `/dreams/:id` | UUID path | `204` | CÃ³ | 400 UUID, 401, 404, 429, 500/503 |
+| GET `/dreams` | Query tùy chọn: `q` (tìm title/content), `emotion`, `tag` (khớp chính xác một tag), `from`/`to` (`YYYY-MM-DD`) | `200 [DreamDTO, ...]`; rỗng là `[]` | Có | 400 query sai, 401, 429, 500/503 |
+| POST `/dreams` | `{title, content, emotion, tags?, clarity_score?, is_lucid?, dream_date}`; `tags` là `string[]`, `clarity_score` 1–5, `is_lucid` boolean | `201 DreamDTO` | Có | 400 validation/field không cho phép, 401, 429, 500/503 |
+| PATCH `/dreams/:id` | UUID path; cùng write fields POST. Đây là update payload đầy đủ; optional fields bỏ qua sẽ nhận default | `200 DreamDTO` | Có | 400 UUID/validation, 401, 404, 429, 500/503 |
+| DELETE `/dreams/:id` | UUID path | `204` | Có | 400 UUID, 401, 404, 429, 500/503 |
 
-`DreamDTO`: Ä‘áº§y Ä‘á»§ `id`, `user_id`, `title`, `content`, `emotion`, `tags`, `clarity_score`, `is_lucid`, `dream_date`, `created_at` theo DATA_CONTRACT. KhÃ´ng cháº¥p nháº­n client ghi `user_id`.
+Write DTO có `title`, `content`, `emotion`, `tags`, `clarity_score`, `is_lucid`, `dream_date`. Defaults: `tags: []`, `clarity_score: 3`, `is_lucid: false`; `title`, `content`, `emotion`, `dream_date` bắt buộc. `emotion` phải thuộc các giá trị `happy`, `peaceful`, `excited`, `sad`, `scared`, `confused`, `neutral`. `dream_date` là ngày lịch đúng `YYYY-MM-DD`, không parse qua timezone.
 
-## Sleep records CRUD
+Response DTO gồm `id`, `user_id`, tất cả writable fields và `created_at`. `id`/`user_id` phải là UUID; `created_at` là timestamp ISO-8601 có timezone. Query `tag` dùng PostgreSQL `text[]` containment (`.contains('tags', [tag])`/PostgREST `cs`). Query `q` chỉ tìm title/content; không dùng `tags.ilike`.
 
-| Method + URL | Request | Response | Auth | Lá»—i dá»± kiáº¿n |
+## Sleep records
+
+| Method + URL | Request | Response | Auth | Lỗi dự kiến |
 |---|---|---|---|---|
-| GET `/sleep-records` | query tÃ¹y chá»n `days` (1..3650), `from`, `to` | `200 [SleepRecordDTO, ...]` â€” JSON array trá»±c tiáº¿p; rá»—ng lÃ  `[]` | CÃ³ | 400, 401, 429, 500/503 |
-| POST `/sleep-records` | `{ "start_time": ISO-8601 cÃ³ Z/offset, "end_time": ISO-8601 cÃ³ Z/offset, "quality_score": 0..100|null, "deep_sleep_minutes": integer, "light_sleep_minutes": integer, "rem_sleep_minutes": integer, "notes": string|null }` | `201 SleepRecordDTO` | CÃ³ | 400 timestamp sai/thiáº¿u timezone, end khÃ´ng sau start, khoáº£ng >24h, client gá»­i duration hoáº·c constraint khÃ¡c; 401, 429, 500/503 |
-| PATCH `/sleep-records/:id` | UUID path; trÆ°á»ng writable Ä‘áº§y Ä‘á»§ (hoáº·c partial sau khi chá»‘t) | `200 SleepRecordDTO` | CÃ³ | 400, 401, 404, 429, 500/503 |
-| DELETE `/sleep-records/:id` | UUID path | `204` | CÃ³ | 400 UUID, 401, 404, 429, 500/503 |
+| GET `/sleep-records` | Query tùy chọn `days` (1–3650), hoặc `from`/`to` (`YYYY-MM-DD`) | `200 [SleepRecordDTO, ...]`; rỗng là `[]` | Có | 400 query sai, 401, 429, 500/503 |
+| POST `/sleep-records` | `{start_time, end_time, quality_score, deep_sleep_minutes?, light_sleep_minutes?, rem_sleep_minutes?, notes?}` | `201 SleepRecordDTO` | Có | 400 timestamp/field/range không hợp lệ, 401, 429, 500/503 |
+| PATCH `/sleep-records/:id` | UUID path; cùng full write fields như POST | `200 SleepRecordDTO` | Có | 400 UUID/validation, 401, 404, 429, 500/503 |
+| DELETE `/sleep-records/:id` | UUID path | `204` | Có | 400 UUID, 401, 404, 429, 500/503 |
 
-`SleepRecordDTO`: `id`, `user_id`, `start_time`, `end_time`, `duration_minutes`, `quality_score`, `deep_sleep_minutes`, `light_sleep_minutes`, `rem_sleep_minutes`, `notes`, `created_at`. Báº£n ghi API lÃ  session Ä‘Ã£ káº¿t thÃºc; `isTracking` khÃ´ng xuáº¥t hiá»‡n.
+`start_time` và `end_time` bắt buộc là ISO-8601 có `Z` hoặc UTC offset. Express validate calendar/time, chuẩn hóa hai giá trị về UTC, yêu cầu `end_time > start_time` và elapsed không quá 24 giờ. Express tính `duration_minutes = floor(elapsed milliseconds / 60000)`; khoảng dương dưới một phút cho kết quả 0. Request có `duration_minutes` hoặc `isTracking`/`is_tracking` bị từ chối. Timestamp thiếu timezone không được diễn giải theo timezone máy chủ.
 
-**Quy táº¯c thá»i gian:** client gá»­i ISO-8601 cÃ³ `Z` hoáº·c UTC offset rÃµ rÃ ng. Express tá»« chá»‘i timestamp invalid/khÃ´ng cÃ³ offset, chuáº©n hÃ³a UTC, yÃªu cáº§u `end_time > start_time`, vÃ  giá»›i háº¡n khoáº£ng ngá»§ tá»‘i Ä‘a 24 giá». Server tÃ­nh `duration_minutes = floor((end_time - start_time) / 60 giÃ¢y)`; khoáº£ng thá»i gian dÆ°Æ¡ng dÆ°á»›i má»™t phÃºt cÃ³ duration 0. Request khÃ´ng chá»©a `duration_minutes`; náº¿u client gá»­i trÆ°á»ng nÃ y, Express reject thay vÃ¬ tin giÃ¡ trá»‹. Response chá»©a duration do server tÃ­nh. PATCH cáº­p nháº­t timestamp pháº£i tÃ­nh láº¡i duration theo cÃ¹ng quy táº¯c. UI hiá»ƒn thá»‹ timestamp theo timezone thiáº¿t bá»‹.\n\nGET á»Ÿ báº£n Ä‘áº§u luÃ´n tráº£ JSON array trá»±c tiáº¿p cho cáº£ hai resource, khÃ´ng dÃ¹ng pagination envelope. CÃ³ thá»ƒ má»Ÿ rá»™ng pagination vá» sau theo contract/version tÆ°Æ¡ng thÃ­ch má»›i (vÃ­ dá»¥ cursor hoáº·c envelope) khi nhu cáº§u tÄƒng; pagination khÃ´ng thuá»™c báº£n Ä‘áº§u.\n\n## Health
+`quality_score` bắt buộc là số nguyên 0–100 theo domain model hiện có. Stage minutes là số nguyên không âm, mặc định 0. `notes` là chuỗi hoặc null; khi ghi DB null được chuẩn hóa thành chuỗi rỗng. `id`, `user_id`, `duration_minutes`, `created_at` và trạng thái tracking không thuộc write DTO. Response DTO đầy đủ gồm các trường trên, cộng `id`, `user_id`, `duration_minutes`, `created_at`; API chỉ chứa phiên đã hoàn tất (`end_time` không null), và `isTracking` không xuất hiện.
 
-| Method + URL | Request | Response | Auth | Lá»—i dá»± kiáº¿n |
-|---|---|---|---|---|
-| GET `/health` (public, base path `/api`) | none | `200 { "status": "ok", "service": "dream-diary-api", "database": "connected" }` | KhÃ´ng | `503 { "status": "degraded", "database": "unavailable" }` |
+## Health và các endpoint khác
 
-## Endpoint hiá»‡n cÃ³ khÃ¡c
+| Method + URL | Thành công | Auth | Lỗi |
+|---|---|---|---|
+| GET `/health` (đường dẫn đầy đủ `/api/health`) | `200 {status:"ok", service:"dream-diary-api", database:"connected"}` | Không | `503 {status:"degraded", database:"unavailable", code:"DEPENDENCY_UNAVAILABLE"}` |
+| DELETE `/account/data` (đường dẫn đầy đủ `/api/account/data`) | Xóa dreams/sleep rows thuộc user hiện tại | Có | 401, lỗi chung; endpoint hiện không atomic và chưa được Flutter dùng |
 
-`DELETE /api/account/data` hiá»‡n xÃ³a dream/sleep rows cho user sau auth, nhÆ°ng chÆ°a náº±m trong má»¥c tiÃªu CRUD thÃ´ng thÆ°á»ng. Giá»¯ láº¡i trong backend hiá»‡n táº¡i; náº¿u Ä‘Æ°a vÃ o client cáº§n xÃ¡c nháº­n UX, re-authentication, transaction/atomicity vÃ  semantics (khÃ´ng xÃ³a tÃ i khoáº£n Supabase). KhÃ´ng nháº§m vá»›i endpoint xÃ³a account.
+## Ghi chú tương thích source và database
 
-## Endpoint vÃ  há»£p Ä‘á»“ng hiá»‡n tráº¡ng cáº§n sá»­a trong bÆ°á»›c triá»ƒn khai
-
-Auth backend tráº£ `{user, session}`; `AuthService` hiá»‡n giáº£ Ä‘á»‹nh `{user, token}`. `ApiClient` chÆ°a gáº¯n JWT. Forgot-password route chÆ°a cÃ³. Dreams backend hiá»‡n dÃ¹ng `tags.ilike` trong free-text query, khÃ´ng tÆ°Æ¡ng thÃ­ch vá»›i PostgreSQL `text[]`; contract má»¥c tiÃªu dÃ¹ng query `tag` khá»›p chÃ­nh xÃ¡c báº±ng array containment, e.g. Supabase query builder `.contains('tags', [tag])` / PostgREST `cs` operator. Free-text `q` tÃ¬m title/content; náº¿u cáº§n substring trÃªn tá»«ng tag thÃ¬ bá»• sung PostgreSQL RPC/function cÃ³ kiá»ƒm soÃ¡t hoáº·c Ä‘á»•i contract, khÃ´ng dÃ¹ng `tags.ilike`. Sleep backend dÃ¹ng `sleep_time/wake_time/quality/note`; id route parse bigint. CÃ¡c Ä‘iá»ƒm nÃ y chÆ°a Ä‘Ã¡p á»©ng spec. Chi tiáº¿t thay Ä‘á»•i DB chá»‰ trong `DATABASE_MIGRATION_PROPOSAL.md`.
-
-## CORS vÃ  URL mÃ´i trÆ°á»ng
-
-- Android Emulator truy cáº­p mÃ¡y host thÆ°á»ng dÃ¹ng `http://10.0.2.2:3000/api`; thiáº¿t bá»‹ tháº­t dÃ¹ng `http://<LAN-IP-host>:3000/api` vÃ  cÃ¹ng máº¡ng/firewall; web/desktop cÃ¹ng host cÃ³ thá»ƒ dÃ¹ng `http://localhost:3000/api`.
-- Production dÃ¹ng HTTPS URL triá»ƒn khai. KhÃ´ng nhÃºng private service key trong app.
-- `CORS_ORIGIN` pháº£i lÃ  danh sÃ¡ch origin chÃ­nh xÃ¡c, theo mÃ´i trÆ°á»ng; `*` hiá»‡n backend cháº¥p nháº­n má»i origin. CORS khÃ´ng thay tháº¿ auth.
-- KhÃ´ng Ä‘á»c file `.env` tháº­t. Root `.gitignore` vÃ  `server/.gitignore` ignore env files vÃ  allowlist `.env.example`; server example keys hiá»‡n cÃ³ tÃªn biáº¿n phÃ¹ há»£p nhÆ°ng config máº«u tá»«ng chá»©a project value cá»¥ thá»ƒ (Ä‘Ã£ Ä‘Æ°á»£c ghi nháº­n á»Ÿ context), pháº£i thay báº±ng placeholder trÆ°á»›c khi commit/chia sáº».
+- Flutter `DreamModel` và `SleepSessionModel` giữ `toJson/fromJson` cho local/mock và pending sleep snapshot. API dùng `toApiWriteJson/fromApiJson` riêng; API parser yêu cầu trường bắt buộc đúng kiểu, UUID hợp lệ, date-only không timezone và timestamp có timezone.
+- Express dream/sleep routes đã được chuẩn hóa theo endpoint, field, UUID, filter owner, array containment, duration server-side và error DTO trong source code. Chúng được inject database client nhưng chưa gọi hoặc kiểm thử với Supabase thật.
+- `supabase_schema.sql` hiện vẫn dùng bigint, `tags text`, dream thiếu fields mới và sleep có legacy `sleep_time/wake_time/quality/note`; source routes chưa thể chạy với schema này trước khi migration được review/áp dụng riêng.
+- Android emulator thường dùng `http://10.0.2.2:3000/api`; thiết bị thật dùng LAN host IP; production dùng HTTPS. CORS allowlist và cấu hình môi trường deploy phải được chốt trước phát hành. Không đưa service-role key vào Flutter.
