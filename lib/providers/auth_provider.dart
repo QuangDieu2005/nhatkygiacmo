@@ -20,22 +20,39 @@ class AuthProvider extends ChangeNotifier {
   AuthStatus _status = AuthStatus.uninitialized;
   UserModel? _user;
   String? _errorMessage;
+  bool _isInitialized = false;
+  Future<void>? _initializationFuture;
 
   AuthStatus get status => _status;
   UserModel? get user => _user;
   String? get errorMessage => _errorMessage;
+  bool get isInitialized => _isInitialized;
   bool get isAuthenticated =>
       _status == AuthStatus.authenticated && _user != null;
 
-  Future<void> checkAuthStatus() async {
-    await _authService.init();
-    if (_authService.isAuthenticated) {
-      _user = _authService.currentUser;
-      _status = AuthStatus.authenticated;
-    } else {
-      _status = AuthStatus.unauthenticated;
-    }
+  Future<void> checkAuthStatus() {
+    if (_isInitialized) return Future<void>.value();
+    return _initializationFuture ??= _restoreAuthStatus();
+  }
+
+  Future<void> _restoreAuthStatus() async {
+    _status = AuthStatus.loading;
+    _errorMessage = null;
     notifyListeners();
+    try {
+      await _authService.init();
+      _user = _authService.isAuthenticated ? _authService.currentUser : null;
+      _status = _user == null
+          ? AuthStatus.unauthenticated
+          : AuthStatus.authenticated;
+    } catch (error) {
+      _user = null;
+      _status = AuthStatus.unauthenticated;
+      _errorMessage = error.toString();
+    } finally {
+      _isInitialized = true;
+      notifyListeners();
+    }
   }
 
   Future<bool> login({required String email, required String password}) async {

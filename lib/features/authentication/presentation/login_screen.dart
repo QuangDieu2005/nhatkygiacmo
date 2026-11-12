@@ -47,7 +47,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (success) {
-        context.go(AppRoutes.home);
+        final requestedLocation = GoRouterState.of(context)
+            .uri
+            .queryParameters['from'];
+        context.go(AppRoutes.locationAfterLogin(requestedLocation));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

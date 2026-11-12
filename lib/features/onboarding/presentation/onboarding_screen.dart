@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/routes/app_routes.dart';
@@ -42,7 +43,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(AppConstants.prefOnboardingCompleted, true);
     if (!mounted) return;
-    context.go(AppRoutes.login);
+    final requestedLocation = GoRouterState.of(context)
+        .uri
+        .queryParameters['from'];
+    context.go(AppRoutes.locationAfterOnboarding(requestedLocation));
   }
 
   void _nextPage() {
@@ -66,15 +70,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.nightSkyGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
         child: SafeArea(
           child: Column(
             children: [
               // Nút Bỏ qua ở góc trên
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 child: Align(
                   alignment: Alignment.topRight,
                   child: TextButton(
@@ -185,7 +190,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ),
                     const SizedBox(height: 32),
                     AppButton(
-                      label: _currentPage == _items.length - 1 ? 'Bắt đầu khám phá' : 'Tiếp tục',
+                      label: _currentPage == _items.length - 1
+                          ? 'Bắt đầu khám phá'
+                          : 'Tiếp tục',
                       onPressed: _nextPage,
                     ),
                   ],

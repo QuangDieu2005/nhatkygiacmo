@@ -257,3 +257,16 @@
 - `flutter test --reporter expanded`: 47/47 passed, exit 0.
 - `git diff --check`: PASS, exit 0 sau khi cập nhật tài liệu; Git chỉ cảnh báo `TASK_LOG.md` có LF sẽ được chuyển CRLF ở lần Git ghi tiếp theo.
 - Chưa chạy backend/Node test, không có xác minh kết nối Supabase, không chạy trên thiết bị thật/emulator và không thực hiện kiểm thử bảo mật xâm nhập. Chỉ `docs/PRE_INTEGRATION_AUDIT.md` và entry này được phép thay đổi trong đợt.
+
+## 2026-11-13 — Đợt 8A.1: Bỏ env khỏi Flutter asset và thêm Auth route guard
+
+- `pubspec.yaml`: bỏ `.env` khỏi Flutter assets; gỡ `flutter_dotenv` vì chỉ được dùng để load file không cung cấp cấu hình cho API client và Supabase init chỉ còn comment. `main.dart` không còn đọc `.env`; `.env`/`server/.env` không bị mở, xóa hay sửa. Chạy `flutter pub get --offline` để đồng bộ `pubspec.lock`; thành công, không tải package mới.
+- Thêm `AuthRouteGuard`; GoRouter giờ được tạo cùng AuthProvider, lắng nghe auth changes qua `refreshListenable`. Guard chờ `AuthProvider.isInitialized`, dùng onboarding flag cho onboarding, redirect unauthenticated đến Login, chuyển authenticated khỏi auth/onboarding/splash đến Home hoặc protected deep link đích. Login/Register/Forgot Password vẫn public sau onboarding; query `from` giữ path parameters và query string khi redirect. Onboarding đưa người dùng đến login/đích đã yêu cầu; logout tự-refresh router về Login. Splash không tự quyết định auth từ `pref_is_logged_in`.
+- `AuthProvider.checkAuthStatus()` nay có trạng thái khởi tạo riêng, khóa gọi restore trùng, đặt loading trong lúc restore và hoàn tất thành unauthenticated nếu restore lỗi. Đây vẫn là trạng thái local mock; không xác thực token với server.
+- Thêm `test/auth_route_guard_test.dart`: 11 test cho onboarding incomplete, unauthenticated routes/deep links (Home, detail, edit, sleep), authenticated routing, logout refresh, loading/restore và register mock không thành authenticated.
+- Kiểm tra cấu hình bằng `rg`: `pubspec.yaml`, `pubspec.lock`, `lib/main.dart` không còn tham chiếu `flutter_dotenv`/`dotenv`; asset list không còn `.env`.
+- `dart format --output=none --set-exit-if-changed` trên 10 file Dart: PASS, 0 file cần format.
+- `flutter analyze --no-pub`: exit 1 với **101 infos, 0 warnings, 0 errors**. Không khẳng định analyzer sạch; các infos tồn tại từ baseline (chủ yếu lint/deprecation) và chưa xử lý trong phạm vi.
+- `flutter test test/auth_route_guard_test.dart --reporter expanded`: **11/11 passed**. `flutter test --reporter expanded`: **58/58 passed**.
+- `git diff --check`: PASS, exit 0 sau khi cập nhật log; Git phát cảnh báo line ending LF→CRLF cho các file tài liệu/source sẽ chạm ở lần ghi tiếp theo.
+- Hạn chế: Authentication vẫn là mock; route guard chỉ kiểm soát navigation UI, không phải biên bảo mật cho backend và không chứng minh user/session/token thật. Không kết nối Supabase, sửa backend/SQL/schema/database, thay Sleep Tracking, đọc env, commit hoặc push.
