@@ -5,7 +5,7 @@ class Validators {
     if (value == null || value.trim().isEmpty) {
       return 'Vui lòng nhập địa chỉ email';
     }
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    final emailRegex = RegExp(r'^[\w.-]+@([\w-]+\.)+[\w-]{2,}$');
     if (!emailRegex.hasMatch(value.trim())) {
       return 'Email không đúng định dạng';
     }

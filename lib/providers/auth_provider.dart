@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 
@@ -11,7 +12,10 @@ enum AuthStatus {
 }
 
 class AuthProvider extends ChangeNotifier {
-  final AuthService _authService = AuthService.instance;
+  AuthProvider({AuthOperations? authService})
+    : _authService = authService ?? AuthService.instance;
+
+  final AuthOperations _authService;
 
   AuthStatus _status = AuthStatus.uninitialized;
   UserModel? _user;
@@ -20,7 +24,8 @@ class AuthProvider extends ChangeNotifier {
   AuthStatus get status => _status;
   UserModel? get user => _user;
   String? get errorMessage => _errorMessage;
-  bool get isAuthenticated => _status == AuthStatus.authenticated && _user != null;
+  bool get isAuthenticated =>
+      _status == AuthStatus.authenticated && _user != null;
 
   Future<void> checkAuthStatus() async {
     await _authService.init();
@@ -34,6 +39,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> login({required String email, required String password}) async {
+    if (_status == AuthStatus.loading) return false;
     _status = AuthStatus.loading;
     _errorMessage = null;
     notifyListeners();
@@ -56,13 +62,17 @@ class AuthProvider extends ChangeNotifier {
     required String password,
     required String name,
   }) async {
+    if (_status == AuthStatus.loading) return false;
     _status = AuthStatus.loading;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _user = await _authService.register(email: email, password: password, name: name);
-      _status = AuthStatus.authenticated;
+      await _authService.register(email: email, password: password, name: name);
+      // Registration success is not equivalent to an authenticated,
+      // email-verified session. The current service only provides mock data.
+      _user = null;
+      _status = AuthStatus.unauthenticated;
       notifyListeners();
       return true;
     } catch (e) {
@@ -74,6 +84,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> forgotPassword(String email) async {
+    if (_status == AuthStatus.loading) return false;
     _status = AuthStatus.loading;
     _errorMessage = null;
     notifyListeners();

@@ -19,6 +19,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   bool _submitted = false;
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -27,35 +28,43 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   Future<void> _handleResetPassword() async {
+    if (_isSubmitting ||
+        context.read<AuthProvider>().status == AuthStatus.loading) {
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
 
     final authProvider = context.read<AuthProvider>();
-    final success = await authProvider.forgotPassword(
-      _emailController.text.trim(),
-    );
-
-    if (!mounted) return;
-
-    if (success) {
-      setState(() {
-        _submitted = true;
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            authProvider.errorMessage ?? 'Không thể gửi email đặt lại mật khẩu',
-          ),
-          backgroundColor: AppColors.error,
-        ),
+    setState(() => _isSubmitting = true);
+    try {
+      final success = await authProvider.forgotPassword(
+        _emailController.text.trim(),
       );
+      if (!mounted) return;
+
+      if (success) {
+        setState(() => _submitted = true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              authProvider.errorMessage ?? 'Kh\u00f4ng th\u1ec3 x\u1eed l\u00fd y\u00eau c\u1ea7u kh\u00f4i ph\u1ee5c.',
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Khôi phục mật khẩu')),
+      appBar: AppBar(
+        title: const Text('Kh\u00f4i ph\u1ee5c m\u1eadt kh\u1ea9u'),
+      ),
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
         child: SafeArea(
@@ -89,7 +98,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Quên mật khẩu?',
+            'Qu\u00ean m\u1eadt kh\u1ea9u?',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -98,7 +107,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Nhập email đã đăng ký. Chúng tôi sẽ gửi hướng dẫn đặt lại mật khẩu cho bạn.',
+            'Nh\u1eadp email \u0111\u00e3 \u0111\u0103ng k\u00fd. Ch\u00fang t\u00f4i s\u1ebd g\u1eedi h\u01b0\u1edbng d\u1eabn \u0111\u1eb7t l\u1ea1i m\u1eadt kh\u1ea9u cho b\u1ea1n.',
             style: TextStyle(
               fontSize: 14,
               color: AppColors.textSecondary,
@@ -108,7 +117,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           const SizedBox(height: 32),
           AppTextField(
             controller: _emailController,
-            label: 'Địa chỉ Email',
+            label: '\u0110\u1ecba ch\u1ec9 Email',
             hint: 'example@email.com',
             prefixIcon: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
@@ -118,8 +127,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           Consumer<AuthProvider>(
             builder: (context, auth, _) {
               return AppButton(
-                label: 'Gửi yêu cầu',
-                isLoading: auth.status == AuthStatus.loading,
+                label: 'G\u1eedi y\u00eau c\u1ea7u',
+                isLoading: _isSubmitting || auth.status == AuthStatus.loading,
                 onPressed: _handleResetPassword,
               );
             },
@@ -148,7 +157,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 20),
           const Text(
-            'Đã gửi email khôi phục',
+            'Y\u00eau c\u1ea7u kh\u00f4i ph\u1ee5c demo \u0111\u00e3 \u0111\u01b0\u1ee3c ghi nh\u1eadn',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
@@ -157,7 +166,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            'Vui lòng kiểm tra hộp thư đến của ${_emailController.text} để tiến hành đặt lại mật khẩu.',
+            'AuthService hi\u1ec7n ch\u1ec9 m\u00f4 ph\u1ecfng thao t\u00e1c. Kh\u00f4ng c\u00f3 email th\u1eadt \u0111\u01b0\u1ee3c g\u1eedi \u0111\u1ebfn ' +
+                _emailController.text +
+                '.',
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 14,
@@ -167,7 +178,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 32),
           AppButton(
-            label: 'Quay lại đăng nhập',
+            label: 'Quay l\u1ea1i \u0111\u0103ng nh\u1eadp',
             onPressed: () => context.pop(),
           ),
         ],

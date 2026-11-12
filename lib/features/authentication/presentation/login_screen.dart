@@ -18,8 +18,9 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController(text: 'demo@dreamdiary.vn');
-  final _passwordController = TextEditingController(text: '123456');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
@@ -29,27 +30,36 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    if (_isSubmitting ||
+        context.read<AuthProvider>().status == AuthStatus.loading) {
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
 
     final authProvider = context.read<AuthProvider>();
-    final success = await authProvider.login(
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-    );
-
-    if (!mounted) return;
-
-    if (success) {
-      context.go(AppRoutes.home);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            authProvider.errorMessage ?? 'Đăng nhập không thành công',
-          ),
-          backgroundColor: AppColors.error,
-        ),
+    setState(() => _isSubmitting = true);
+    try {
+      final success = await authProvider.login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
       );
+
+      if (!mounted) return;
+
+      if (success) {
+        context.go(AppRoutes.home);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              authProvider.errorMessage ?? 'Đăng nhập không thành công',
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -150,7 +160,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           builder: (context, auth, _) {
                             return AppButton(
                               label: 'Đăng nhập',
-                              isLoading: auth.status == AuthStatus.loading,
+                              isLoading:
+                                  _isSubmitting ||
+                                  auth.status == AuthStatus.loading,
                               onPressed: _handleLogin,
                             );
                           },
