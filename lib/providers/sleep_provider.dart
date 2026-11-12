@@ -21,6 +21,8 @@ class SleepProvider extends ChangeNotifier {
 
   List<SleepSessionModel> _sessions = [];
   SleepSessionModel? _activeSession;
+  SleepSessionModel? _pendingCompletedSession;
+  bool _pendingRepositoryRecoveryFailed = false;
   SleepSessionModel? _lastCompletedSession;
   SleepStatisticsModel _statistics = SleepStatisticsModel.empty();
 
@@ -32,6 +34,10 @@ class SleepProvider extends ChangeNotifier {
 
   List<SleepSessionModel> get sessions => _sessions;
   SleepSessionModel? get activeSession => _activeSession;
+  SleepSessionModel? get pendingCompletedSession => _pendingCompletedSession;
+  bool get pendingRepositoryRecoveryFailed => _pendingRepositoryRecoveryFailed;
+  bool get isPendingCompletedSessionSaved =>
+      _trackingService.isPendingCompletedSessionSaved;
   SleepSessionModel? get lastCompletedSession => _lastCompletedSession;
   SleepStatisticsModel get statistics => _statistics;
   bool get isTracking => _activeSession != null;
@@ -41,6 +47,9 @@ class SleepProvider extends ChangeNotifier {
   Future<void> init() async {
     await _trackingService.init();
     final pending = _trackingService.pendingCompletedSession;
+    _pendingCompletedSession = pending;
+    _activeSession = pending == null ? _trackingService.activeSession : null;
+    _pendingRepositoryRecoveryFailed = false;
     if (pending != null && _trackingService.isPendingCompletedSessionSaved) {
       try {
         // Re-apply the confirmed ID as an upsert so repositories that are
@@ -48,22 +57,17 @@ class SleepProvider extends ChangeNotifier {
         await _repository.addSession(pending);
         _lastCompletedSession = pending;
       } catch (_) {
-        // If repository restoration fails, retain the pending session as a
-        // retryable state instead of reporting it as completed.
-        _activeSession = _trackingService.activeSession ?? pending;
+        // Keep it pending, not active: its end time and duration are fixed.
+        _pendingRepositoryRecoveryFailed = true;
         _currentElapsed = Duration(minutes: pending.totalMinutes);
       }
-    } else {
-      _activeSession = _trackingService.activeSession ?? pending;
     }
-    if (_lastCompletedSession == null) {
-      if (pending != null) {
-        // A pending snapshot represents an already ended interval. Keep its
-        // displayed duration fixed while allowing the user to retry the save.
-        _currentElapsed = Duration(minutes: pending.totalMinutes);
-      } else if (_activeSession != null) {
-        _startElapsedTimer();
-      }
+    if (pending != null) {
+      // A pending snapshot is already ended even when its active backup key
+      // remains. Freeze the clock to the original snapshot duration.
+      _currentElapsed = Duration(minutes: pending.totalMinutes);
+    } else if (_activeSession != null) {
+      _startElapsedTimer();
     }
     await loadSessions();
   }
@@ -109,8 +113,13 @@ class SleepProvider extends ChangeNotifier {
       // Refresh persisted state before deciding whether a new session is safe.
       await _trackingService.init();
       final pending = _trackingService.pendingCompletedSession;
+      _pendingCompletedSession = pending;
+      _pendingRepositoryRecoveryFailed = false;
+      _activeSession = pending == null ? _trackingService.activeSession : null;
       if (pending != null) {
+        _currentElapsed = Duration(minutes: pending.totalMinutes);
         if (!_trackingService.isPendingCompletedSessionSaved) {
+          notifyListeners();
           throw const SleepTrackingStartException(
             'Phiên ngủ trước chưa được lưu. Hãy kết thúc và thử lưu lại phiên đó trước.',
           );
@@ -120,23 +129,29 @@ class SleepProvider extends ChangeNotifier {
           // Rehydrate process-local history before deleting its durable snapshot.
           await _repository.addSession(pending);
         } catch (_) {
+          _pendingRepositoryRecoveryFailed = true;
+          notifyListeners();
           throw const SleepTrackingStartException(
             'Chưa thể khôi phục phiên đã lưu vào lịch sử. Hãy thử lại.',
           );
         }
 
+        // Keep the completed result visible if cleanup or the next start fails.
+        _lastCompletedSession = pending;
         try {
           await _trackingService.clearActiveSession();
         } catch (_) {
-          // The user may have dismissed the completed view earlier. Restore it
-          // before reporting cleanup failure so the saved session stays visible.
-          _lastCompletedSession = pending;
           notifyListeners();
           throw const SleepTrackingStartException(
             'Phiên trước đã lưu nhưng chưa thể dọn trạng thái cũ. Hãy thử lại.',
           );
         }
+        _pendingCompletedSession = null;
+        _currentElapsed = Duration.zero;
       } else if (_trackingService.activeSession != null) {
+        _activeSession = _trackingService.activeSession;
+        _startElapsedTimer();
+        notifyListeners();
         throw const SleepTrackingStartException(
           'Đã có phiên ngủ cần được khôi phục trước khi bắt đầu phiên mới.',
         );
@@ -150,6 +165,8 @@ class SleepProvider extends ChangeNotifier {
       _activeSession = session;
       _startElapsedTimer();
       _lastCompletedSession = null;
+      _pendingCompletedSession = null;
+      _pendingRepositoryRecoveryFailed = false;
       notifyListeners();
     } finally {
       _isStarting = false;
@@ -157,29 +174,46 @@ class SleepProvider extends ChangeNotifier {
   }
 
   Future<SleepSessionModel?> stopTracking({String? notes, List<DreamModel>? dreams}) async {
-    if (_isStopping || _isStarting || !isTracking) return null;
+    if (_isStopping || _isStarting ||
+        (!isTracking && _pendingCompletedSession == null)) {
+      return null;
+    }
     _isStopping = true;
     try {
       final completed = await _trackingService.prepareCompletedSession(notes: notes);
       if (completed == null) return null;
 
+      _pendingCompletedSession = completed;
+      _activeSession = null;
+      _pendingRepositoryRecoveryFailed = false;
       // The snapshot is immutable across retries, so freeze the elapsed display
       // at the same duration represented by that snapshot.
       _elapsedTimer?.cancel();
       _currentElapsed = Duration(minutes: completed.totalMinutes);
+      notifyListeners();
 
       // Keep both provider and persisted active state intact unless saving succeeds.
-      await _repository.addSession(completed);
-      await _trackingService.markPendingCompletedSessionSaved();
-      await _trackingService.clearActiveSession();
+      try {
+        await _repository.addSession(completed);
+        await _trackingService.markPendingCompletedSessionSaved();
+        await _trackingService.clearActiveSession();
+      } catch (_) {
+        _pendingRepositoryRecoveryFailed =
+            _trackingService.isPendingCompletedSessionSaved;
+        notifyListeners();
+        rethrow;
+      }
 
       _elapsedTimer?.cancel();
       _activeSession = null;
+      _pendingCompletedSession = null;
+      _pendingRepositoryRecoveryFailed = false;
       _currentElapsed = Duration.zero;
       _lastCompletedSession = completed;
-      if (!_sessions.any((session) => session.id == completed.id)) {
-        _sessions.insert(0, completed);
-      }
+      _sessions = [
+        completed,
+        ..._sessions.where((session) => session.id != completed.id),
+      ];
       try {
         _statistics = await _repository.getStatistics(dreams: dreams);
       } catch (_) {

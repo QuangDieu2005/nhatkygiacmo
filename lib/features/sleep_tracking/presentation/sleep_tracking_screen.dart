@@ -29,6 +29,7 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<SleepProvider>();
     final session = provider.lastCompletedSession;
+    final pendingSession = provider.pendingCompletedSession;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Theo dõi giấc ngủ')),
@@ -40,32 +41,44 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen> {
               constraints: const BoxConstraints(maxWidth: 620),
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 260),
-                child: session != null
-                    ? _CompletedView(
-                        key: const ValueKey('completed'),
-                        session: session,
-                        saveWarning: _stopFailed,
-                        onRecordDream: () {
-                          provider.clearLastCompletedSession();
-                          context.push(AppRoutes.addDream);
-                        },
-                        onFinish: () {
-                          provider.clearLastCompletedSession();
-                          context.go(AppRoutes.home);
-                        },
+                child: pendingSession != null &&
+                        (session == null ||
+                            !provider.isPendingCompletedSessionSaved ||
+                            provider.pendingRepositoryRecoveryFailed)
+                    ? _PendingView(
+                        key: const ValueKey('pending'),
+                        session: pendingSession,
+                        repositorySaved: provider.isPendingCompletedSessionSaved,
+                        recoveryFailed: provider.pendingRepositoryRecoveryFailed,
+                        isSaving: _isStopping,
+                        onRetry: () => _retryPending(provider),
                       )
-                    : provider.isTracking
-                        ? _TrackingView(
-                            key: const ValueKey('tracking'),
-                            provider: provider,
-                            isStopping: _isStopping,
-                            onStop: () => _stopTracking(provider),
+                    : session != null
+                        ? _CompletedView(
+                            key: const ValueKey('completed'),
+                            session: session,
+                            saveWarning: _stopFailed,
+                            onRecordDream: () {
+                              provider.clearLastCompletedSession();
+                              context.push(AppRoutes.addDream);
+                            },
+                            onFinish: () {
+                              provider.clearLastCompletedSession();
+                              context.go(AppRoutes.home);
+                            },
                           )
-                        : _ReadyView(
-                            key: const ValueKey('ready'),
-                            isStarting: _isStarting,
-                            onStart: () => _startTracking(provider),
-                          ),
+                        : provider.isTracking
+                            ? _TrackingView(
+                                key: const ValueKey('tracking'),
+                                provider: provider,
+                                isStopping: _isStopping,
+                                onStop: () => _stopTracking(provider),
+                              )
+                            : _ReadyView(
+                                key: const ValueKey('ready'),
+                                isStarting: _isStarting,
+                                onStart: () => _startTracking(provider),
+                              ),
               ),
             ),
           ),
@@ -88,6 +101,23 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen> {
       }
     } finally {
       if (mounted) setState(() => _isStarting = false);
+    }
+  }
+
+  Future<void> _retryPending(SleepProvider provider) async {
+    if (_isStopping || _isStarting) return;
+    setState(() => _isStopping = true);
+    try {
+      final completed = await provider.stopTracking();
+      if (completed == null && mounted) {
+        _showMessage('Chưa thể khôi phục phiên ngủ. Hãy thử lại.');
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Chưa thể lưu hoặc khôi phục phiên ngủ. Dữ liệu đang được giữ lại.');
+      }
+    } finally {
+      if (mounted) setState(() => _isStopping = false);
     }
   }
 
@@ -354,6 +384,70 @@ class _RestingIllustration extends StatelessWidget {
         ),
         child: const Icon(Icons.bedtime_outlined,
             size: 70, color: AppColors.primaryLight),
+      );
+}
+
+class _PendingView extends StatelessWidget {
+  const _PendingView({
+    super.key,
+    required this.session,
+    required this.repositorySaved,
+    required this.recoveryFailed,
+    required this.isSaving,
+    required this.onRetry,
+  });
+
+  final SleepSessionModel session;
+  final bool repositorySaved;
+  final bool recoveryFailed;
+  final bool isSaving;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 26, 24, 30),
+        child: Column(
+          children: [
+            const Icon(Icons.cloud_sync_rounded,
+                color: AppColors.warning, size: 48),
+            const SizedBox(height: 14),
+            Text(
+              repositorySaved
+                  ? 'Phiên ngủ đang chờ khôi phục'
+                  : 'Phiên ngủ đang chờ lưu',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 21,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              repositorySaved
+                  ? recoveryFailed
+                      ? 'Phiên đã được xác nhận lưu, nhưng chưa thể nạp lại vào lịch sử. Hãy thử khôi phục; ứng dụng chưa bắt đầu phiên mới.'
+                      : 'Phiên đã kết thúc và đang chờ hoàn tất phục hồi trạng thái.'
+                  : 'Phiên đã kết thúc nhưng chưa lưu thành công. Dữ liệu gốc đang được giữ để bạn thử lại.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 13, height: 1.5),
+            ),
+            const SizedBox(height: 22),
+            _SessionSummary(session: session),
+            const SizedBox(height: 20),
+            AppButton(
+              label: isSaving
+                  ? 'Đang xử lý phiên…'
+                  : repositorySaved
+                      ? 'Thử khôi phục phiên'
+                      : 'Thử lưu lại phiên',
+              icon: Icons.refresh_rounded,
+              isLoading: isSaving,
+              onPressed: isSaving ? null : onRetry,
+            ),
+          ],
+        ),
       );
 }
 
