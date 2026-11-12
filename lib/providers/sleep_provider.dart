@@ -16,6 +16,8 @@ class SleepProvider extends ChangeNotifier {
   SleepStatisticsModel _statistics = SleepStatisticsModel.empty();
 
   bool _isLoading = false;
+  bool _isStarting = false;
+  bool _isStopping = false;
   Timer? _elapsedTimer;
   Duration _currentElapsed = Duration.zero;
 
@@ -65,28 +67,48 @@ class SleepProvider extends ChangeNotifier {
   }
 
   Future<void> startTracking({String userId = 'user_01'}) async {
+    if (_isStarting || _isStopping || isTracking || _trackingService.isTracking) return;
+    _isStarting = true;
     _lastCompletedSession = null;
-    final session = await _trackingService.startSleepTracking(userId: userId);
-    _activeSession = session;
-    _startElapsedTimer();
-    notifyListeners();
+    try {
+      final session = await _trackingService.startSleepTracking(userId: userId);
+      _activeSession = session;
+      _startElapsedTimer();
+      notifyListeners();
+    } finally {
+      _isStarting = false;
+    }
   }
 
   Future<SleepSessionModel?> stopTracking({String? notes, List<DreamModel>? dreams}) async {
-    _elapsedTimer?.cancel();
-    final completed = await _trackingService.stopSleepTracking(notes: notes);
-    _activeSession = null;
-    _currentElapsed = Duration.zero;
+    if (_isStopping || _isStarting || !isTracking) return null;
+    _isStopping = true;
+    try {
+      final completed = await _trackingService.prepareCompletedSession(notes: notes);
+      if (completed == null) return null;
 
-    if (completed != null) {
-      _lastCompletedSession = completed;
+      // Keep both provider and persisted active state intact unless saving succeeds.
       await _repository.addSession(completed);
-      _sessions.insert(0, completed);
-      _statistics = await _repository.getStatistics(dreams: dreams);
-    }
+      await _trackingService.clearActiveSession();
 
-    notifyListeners();
-    return completed;
+      _elapsedTimer?.cancel();
+      _activeSession = null;
+      _currentElapsed = Duration.zero;
+      _lastCompletedSession = completed;
+      if (!_sessions.any((session) => session.id == completed.id)) {
+        _sessions.insert(0, completed);
+      }
+      try {
+        _statistics = await _repository.getStatistics(dreams: dreams);
+      } catch (_) {
+        // The completed session is already saved; a statistics refresh must not
+        // turn a successful save into a failed stop operation.
+      }
+      notifyListeners();
+      return completed;
+    } finally {
+      _isStopping = false;
+    }
   }
 
   void clearLastCompletedSession() {

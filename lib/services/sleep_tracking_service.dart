@@ -41,7 +41,9 @@ class SleepTrackingService {
     return session;
   }
 
-  Future<SleepSessionModel?> stopSleepTracking({String? notes}) async {
+  /// Builds a completed snapshot without ending or persisting the active state.
+  /// The caller must save it to the repository before calling [clearActiveSession].
+  Future<SleepSessionModel?> prepareCompletedSession({String? notes}) async {
     if (_activeSession == null) return null;
 
     final endTime = DateTime.now();
@@ -62,11 +64,18 @@ class SleepTrackingService {
       remSleepMinutes: (durationMinutes * 0.20).toInt(),
     );
 
-    _activeSession = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(AppConstants.prefActiveSession);
-
     return completedSession;
+  }
+
+  /// Clears the recoverable active session after its completed snapshot is saved.
+  Future<void> clearActiveSession() async {
+    if (_activeSession == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final removed = await prefs.remove(AppConstants.prefActiveSession);
+    if (!removed && prefs.containsKey(AppConstants.prefActiveSession)) {
+      throw StateError('Could not clear the persisted active sleep session.');
+    }
+    _activeSession = null;
   }
 
   int _calculateQualityScore(int durationMinutes) {

@@ -104,6 +104,7 @@ class SleepRepository {
 
   Future<void> addSession(SleepSessionModel session) async {
     await Future.delayed(const Duration(milliseconds: 200));
+    if (_sessions.any((existing) => existing.id == session.id)) return;
     _sessions.insert(0, session);
   }
 
