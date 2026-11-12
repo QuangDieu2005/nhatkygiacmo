@@ -1,56 +1,51 @@
 ﻿# PROJECT_CONTEXT — Dream Diary
 
-Ngày rà soát: 2026-11-12. Phân tích dựa trên checkout local; không đối chiếu thay đổi mới nhất trên GitHub. Không đọc nội dung `.env`/`server/.env`.
+Ngày rà soát bổ sung: 2026-11-12. Phạm vi giai đoạn 2 là tài liệu thiết kế. Không đọc `.env`/`server/.env`, không gọi Supabase. GitHub chưa được đối chiếu; ghi nhận theo checkout local.
 
-## Tóm tắt
-Ứng dụng nhật ký giấc mơ và theo dõi giấc ngủ dùng Flutter/Dart, giao diện Material 3 tối, Provider và GoRouter. Repository có một backend Express/Node.js và schema PostgreSQL/Supabase, nhưng luồng client hiện tại chưa nối backend thật: đăng nhập giả lập; giấc mơ/phiên ngủ từ repository trong bộ nhớ; phiên ngủ đang chạy và một số cài đặt dùng SharedPreferences. Tài liệu hiện có mô tả tích hợp Supabase như đã hoàn tất, không phản ánh mã hiện hành.
+## Kiến trúc đã chọn
+**Flutter → Node.js/Express REST API → Supabase PostgreSQL/Auth.** Flutter không dùng Supabase Flutter trực tiếp cho CRUD nghiệp vụ. Supabase Flutter vẫn đang được khai báo nhưng không được khởi tạo trong `main.dart`; có thể cần xem xét gỡ dependency ở nhiệm vụ implementation riêng, không phải hiện tại.
 
-## Thành phần và luồng dữ liệu
-- Khởi động: `lib/main.dart` tải dotenv nếu được, khởi tạo `ApiClient` và thông báo; Supabase.initialize đang comment. Sau đó `app.dart` đăng ký `AuthProvider`, `DreamProvider`, `SleepProvider`.
-- UI → Provider → Repository/Service → Model. Điều hướng khai báo ở `lib/core/routes/app_router.dart`, các màn hình theo feature ở `lib/features/`.
-- Auth: `AuthProvider` → `AuthService` → `ApiService.login/register` trả user/token giả → `SharedPreferences`. Khôi phục session đọc user/token đã lưu; không có xác minh token phía server. Quên mật khẩu chỉ đợi giả lập.
-- Dream: `DreamProvider` gọi `DreamRepository`; repository chứa 10 mục mẫu hard-code và CRUD chỉ thay đổi list trong bộ nhớ. Dữ liệu mất khi tiến trình khởi động lại.
-- Sleep: `SleepRepository` chứa 7 phiên mẫu; `SleepTrackingService` lưu phiên đang chạy trong SharedPreferences, tạo thời lượng/chất lượng và phân bổ giai đoạn bằng công thức ước lượng. Phiên hoàn tất thêm vào list trong bộ nhớ, không lưu bền.
-- Analytics/history lấy từ repositories/providers hiện tại nên dựa trên fixture, không phải dữ liệu Supabase.
-- `ApiClient` cấu hình Dio nhưng interceptor chưa gắn token. `ApiService` chưa gọi HTTP ở các nghiệp vụ auth/dream/sleep.
-- Backend: Express dùng Helmet, CORS, rate limit, middleware kiểm JWT qua Supabase Auth; CRUD gọi Supabase bằng service-role và lọc `user_id`. Các endpoint gồm auth login/register/refresh/logout, dreams, sleep-records, health, xóa data tài khoản.
-- Database theo `supabase_schema.sql`: `dreams` và `sleep_records`, khóa tới `auth.users`, index theo user/ngày, RLS select/insert/update/delete theo `auth.uid()`.
+Flutter UI → Provider → service/repository → Dio API client. Express xác minh Supabase access token, lấy `req.user.id`, thực hiện truy vấn PostgreSQL theo owner. Auth endpoints của backend gọi Supabase Auth; service-role chỉ phía server. RLS bật làm lớp bảo vệ bổ sung, nhưng service-role bypass RLS nên owner filter ở server bắt buộc.
 
-## Công nghệ
-Flutter/Dart (SDK constraint `^3.13.0`), Provider, GoRouter, Dio, Supabase JS ở server, Supabase Flutter/dotenv (khai báo nhưng chưa khởi tạo), SharedPreferences, flutter_local_notifications, fl_chart. Node backend là ES modules, Express 5, `@supabase/supabase-js`, dotenv, CORS, Helmet, express-rate-limit.
+## Hiện trạng implementation (không thay đổi trong giai đoạn 2)
+- Auth Flutter mock, SharedPreferences lưu user/token, forgot-password giả lập; `AuthProvider` nhận `UserModel`/bool, không biểu diễn pending confirmation.
+- `ApiClient` URL mặc định cổng 5000 trong khi server port mặc định 3000; interceptor chưa gắn bearer.
+- `ApiService` auth/dream/sleep vẫn mock/stub; CRUD app dùng repositories fixtures/in-memory.
+- Backend hiện có auth register/login/refresh/logout; dreams CRUD; sleep-records CRUD; health; account data delete. Thiếu forgot/reset password.
+- Server middleware gọi `authClient.auth.getUser(accessToken)`, sau đó route dùng service-role lọc `user_id`. Schema hiện RLS owner policies.
 
-## Trạng thái chức năng
-### Đã có ở mức UI/logic cục bộ
-- Onboarding, splash, đăng nhập/đăng ký/quên mật khẩu (màn hình); trạng thái auth mô phỏng.
-- CRUD giấc mơ, tìm kiếm/lọc cảm xúc; thao tác trong bộ nhớ.
-- Bắt đầu/dừng đồng hồ phiên ngủ, khôi phục phiên đang chạy cục bộ; thống kê/chart và history.
-- Cài đặt mục tiêu/ngôn ngữ thông báo (?) và hồ sơ cục bộ; kiểm tra kỹ màn hình trước khi coi là hoàn chỉnh.
-- Dịch vụ khởi tạo và hiển thị local notification cơ bản; lịch nhắc theo giờ chưa được xác nhận.
-### Giả lập/ước lượng
-- Login/register trả token giả; forgot-password không gửi email.
-- 10 giấc mơ và 7 phiên ngủ seed trong code, dùng chung `user_01`.
-- CRUD dream/sleep và analytics không chạm DB; danh sách ngủ không bền sau khi kết thúc phiên.
-- Chất lượng ngủ dựa trên số giờ; REM/deep/light là tỷ lệ giả định, không đo từ thiết bị.
-- `ApiService.fetchDreams/fetchSleepSessions` trả list rỗng; create/sync trả nguyên đối tượng.
-### Chưa nối/chưa xác nhận hoạt động
-- Supabase Flutter Auth/DB: chưa `initialize`; không phải đường dữ liệu mà app hiện sử dụng.
-- Kết nối REST từ Flutter tới Node: chưa gọi trong `ApiService`, token interceptor rỗng, URL hằng mặc định dùng localhost:5000 trong khi backend mặc định 3000.
-- Đồng bộ CRUD, reset password thực tế, xử lý refresh/session hết hạn, kiểm thử đa người dùng với backend.
-- Tác vụ nhắc giờ ngủ được lên lịch và kiểm thử trên nền tảng mục tiêu.
+## Hợp đồng mục tiêu
+Chi tiết đầy đủ ở `docs/DATA_CONTRACT.md`, endpoint ở `docs/API_SPECIFICATION.md`, migration ở `docs/DATABASE_MIGRATION_PROPOSAL.md`.
 
-## Phát hiện và rủi ro
-1. **Mâu thuẫn kiến trúc/tài liệu:** README_SUPABASE nói Supabase Auth/DB đang hoạt động; README_BACKEND mô tả REST; mã Flutter hiện dùng mock/local. Cần chọn/ghi nhận một đường tích hợp trong giai đoạn sau, không làm thay đổi schema tùy tiện.
-2. **Schema không tương thích model/API:** schema `dreams.tags` là `text`, model gửi list; API dreams nhận trường này trực tiếp. Model có `dream_date`, `clarity_score`, `is_lucid`, nhưng schema/API không lưu chúng; schema sinh `id` bigint trong khi Dart ép `id` thành String.
-3. **Sleep không tương thích:** schema/API dùng `sleep_time`, `wake_time`, `quality` (1–10), `note`; Dart model dùng start/end, `quality_score` (0–100), giai đoạn ngủ và `notes`. API route `sleep-records`, trong khi Flutter stub gọi `sleep-sessions`.
-4. **Auth chưa tương thích:** backend trả `session` có `access_token`/refresh token; stub Flutter kỳ vọng `token`. Signup có thể trả session null khi cần xác nhận email, còn client stub luôn giả định user/token có mặt.
-5. **Rủi ro dữ liệu người dùng:** giả lập cho phép login bất kỳ email/mật khẩu; token mock được lưu SharedPreferences. Đây không phải xác thực an toàn.
-6. **Cấu hình:** `server/.env.example` khai báo một Supabase URL và publishable key cụ thể thay vì giá trị mẫu; publishable key không phải service secret nhưng vẫn là cấu hình dự án. Cần thay bằng placeholder trong nhiệm vụ bảo mật riêng. API base URL mặc định Flutter lệch cổng backend; localhost không phù hợp Android emulator/điện thoại.
-7. **Giai đoạn ngủ:** điểm chất lượng/REM/deep/light là ước lượng theo thời lượng, không phải cảm biến; thống kê streak đang hard-code 5 và mặc định dream count 10 khi không truyền.
-8. **Kiểm thử:** `test/widget_test.dart` chỉ smoke test tối thiểu, không xác minh auth/CRUD/database; khởi tạo providers và timer có thể gây phụ thuộc thời gian trong test.
-9. **Khả năng tương thích nền tảng:** thông báo và dotenv cần xác minh trên Android/iOS/web/desktop. Các thư mục assets khai báo trong pubspec nhưng chưa xuất hiện trong danh sách file; cần xác nhận build/analyzer.
+- `dreams`: UUID id/user; title/content/emotion; tags `text[]`; clarity 1..5; lucid boolean; `dream_date DATE`; `created_at TIMESTAMPTZ`.
+- `sleep_records`: UUID id/user; start/end `TIMESTAMPTZ` UTC; duration minutes; quality 0..100; deep/light/REM minutes; notes; created_at. Khuyến nghị API chỉ nhận session đã hoàn tất ở bản đầu; active `isTracking` giữ local.
+- User identity do Supabase Auth cấp UUID. `UserModel` có settings/avatar chưa có API/table; tiếp tục local cho tới khi có yêu cầu.
+- API wire keys `snake_case`, Flutter property giữ camelCase; server sinh ID/owner/created timestamp.
 
-## Bảo mật và dữ liệu
-Schema bật RLS và chính sách owner-scoped. Backend xác minh access token, sau đó truy vấn service-role với `user_id`; nguyên tắc lọc hiện diện trong các routes. Không đọc giá trị `.env` trong lần rà soát này. `server/.env.example` có cấu hình dự án cụ thể như mô tả phía trên. Không có migration hoặc dữ liệu Supabase nào được áp dụng trong giai đoạn này.
+## Mismatch chính được xác nhận
+1. Dream schema id bigint; model ép id String. DB tags text nhưng Dart gửi list. DB/API thiếu dream_date, clarity_score, is_lucid.
+2. Sleep schema/API dùng `sleep_time`, `wake_time`, quality 1..10, note; model dùng `startTime/endTime`, qualityScore 0..100, stages, notes. ID DB bigint, Dart String. `isTracking` là trạng thái local.
+3. Auth API trả `{user, session}` với Supabase `access_token`/`refresh_token`; AuthService mock kỳ vọng `{user, token}`. Signup backend trả 202/session null khi confirmation required; provider không có trạng thái pending.
+4. Forgot password chưa có backend route. Logout backend cần Bearer access token nhưng client chưa gọi. Refresh route tồn tại nhưng client không dùng.
+5. Backend route sleep là `/sleep-records`, Flutter stub nhắc `/sleep-sessions`. URL/API port lệch.
+6. GET list hiện trả array trực tiếp; spec đề xuất envelope pagination nhưng đây là lựa chọn compatibility cần chốt trước implement.
 
-## Giới hạn xác minh
-Rà soát tĩnh các file nguồn, cấu hình, schema và tài liệu trong checkout. `flutter analyze` được yêu cầu chạy nhưng chưa có kết quả tại thời điểm lập bản ghi ban đầu; cập nhật khi tiến trình kết thúc. Không gọi Supabase, không chạy server và không kiểm tra credentials.
+## Bảo mật/cấu hình
+- Không mở file `.env` hay `server/.env`; `.env.example` root dùng placeholder. Server env example có tên biến đúng nhưng đã ghi nhận ở giai đoạn trước có Supabase project config cụ thể; phải thay placeholder trước chia sẻ.
+- Root và server `.gitignore` hiện có ignore `.env`, `.env.*` và allowlist `.env.example`. Đây là kiểm tra tên/quy tắc, không kiểm tra giá trị thật.
+- `CORS_ORIGIN` hiện mặc định `*`; nên đặt origin allowlist cho deploy. CORS không thay auth.
+- API URL gợi ý: Android emulator `10.0.2.2:3000`; thiết bị thật LAN IP host; web/desktop cùng máy `localhost:3000`; production HTTPS.
+- Không service-role key ở Flutter. SharedPreferences không phù hợp lưu refresh/access token nhạy cảm; secure storage/platform-specific web policy cần thiết kế trước tích hợp.
+
+## Decisions còn mở
+- DATE hay TIMESTAMPTZ cho dream date: đề xuất DATE.
+- Chỉ sync session hoàn tất hay lưu active session đa thiết bị: đề xuất chỉ completed ở bản đầu.
+- `quality_score` bắt buộc hay nullable; duration server tính hay validate input.
+- Dữ liệu cũ có thật không, sleep text có timezone nào, tag delimiter là gì, consumer dùng bigint nào.
+- Pagination envelope hay giữ list array.
+- Profile/settings cần server-side hay tiếp tục local.
+
+Không suy đoán thay chủ dự án. Xem migration proposal để biết các câu hỏi cần inventory/approval.
+
+## Tài liệu và giới hạn kiểm tra
+Giai đoạn 2 tạo `DATA_CONTRACT.md`, `API_SPECIFICATION.md`, `DATABASE_MIGRATION_PROPOSAL.md` và cập nhật context/plan/log. Chỉ rà soát tĩnh; không thực thi analyzer/test/server/migration trong nhiệm vụ này. Không thay đổi UI, app code, backend code, schema hay database.

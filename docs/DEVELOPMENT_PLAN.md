@@ -1,38 +1,41 @@
 ﻿# DEVELOPMENT_PLAN — Dream Diary
 
-Kế hoạch gợi ý theo thứ tự phụ thuộc; chưa triển khai trong giai đoạn 1. Giữ nguyên UI và kiến trúc feature/provider/repository, thay đổi nhỏ có thể kiểm chứng.
+Kế hoạch theo kiến trúc đã được chọn: **Flutter → Node.js/Express REST API → Supabase PostgreSQL/Auth**. Flutter không dùng Supabase Flutter trực tiếp cho CRUD nghiệp vụ. Tài liệu giai đoạn 2 chuẩn hóa hợp đồng; chưa triển khai kết nối hoặc migration.
 
 ## Giai đoạn 1 — Khảo sát/tài liệu hóa (hoàn thành)
-- Ghi hiện trạng kiến trúc, luồng dữ liệu, giả lập, schema/API mismatch, rủi ro và kết quả kiểm tra.
-- Không sửa mã ứng dụng, schema, hoặc dữ liệu Supabase.
+- Ghi hiện trạng, luồng dữ liệu, fixtures, schema/API mismatch và rủi ro.
+- Không sửa mã app/schema hoặc dữ liệu Supabase.
 
-## Giai đoạn 2 — Chốt hợp đồng dữ liệu và cấu hình
-- Quyết định REST backend là đường dữ liệu dự kiến hay Supabase Flutter trực tiếp; cập nhật tài liệu thống nhất.
-- Đối chiếu field/model/schema/endpoint cho dream và sleep, gồm kiểu ID, tags, ngày, điểm chất lượng và giai đoạn ngủ.
-- Thay cấu hình dự án có thật trong `server/.env.example` bằng placeholder; rà soát ignore rules và cách nạp biến môi trường mà không in secret.
-- Chỉ lập migration đề xuất; xin yêu cầu riêng trước bất kỳ thay đổi DB nào.
+## Giai đoạn 2 — Chuẩn hóa kiến trúc/dữ liệu (tài liệu hoàn thành; quyết định nghiệp vụ còn mở)
+- `docs/DATA_CONTRACT.md`: ánh xạ models ↔ DTO ↔ DB, required/optional/internal fields.
+- `docs/API_SPECIFICATION.md`: endpoint và auth/session/error contract mục tiêu; nêu rõ endpoint hiện hữu/thiếu.
+- `docs/DATABASE_MIGRATION_PROPOSAL.md`: schema đích và migration additive có điều kiện, chưa chạy.
+- Chủ dự án xác nhận các điểm mở về ngày giấc mơ, quality nullable, active sleep sync, profile/settings và migration dữ liệu hiện hữu.
 
-## Giai đoạn 3 — Kết nối auth
-- Thay mock auth bằng luồng đã chọn; xử lý xác nhận email, access/refresh token, logout và reset password.
-- Chỉ giữ token theo cơ chế an toàn phù hợp nền tảng; không coi SharedPreferences là nơi lưu token bảo mật.
-- Bảo đảm middleware xác minh JWT và quyền truy cập theo user.
+## Giai đoạn 3 — Chuẩn hóa cấu hình/bảo mật
+- Thay config dự án cụ thể trong server `.env.example` bằng placeholder; không hiển thị env thật.
+- Chốt env keys, URL theo Android emulator/device/web/prod, CORS origin allowlist, HTTPS.
+- Chốt secure storage/session handling; không để SharedPreferences là nơi chứa bearer/refresh token.
 
-## Giai đoạn 4 — Repository dữ liệu thật
-- Nối dream CRUD, sleep records và xử lý lỗi/loading/empty state qua API/service.
-- Giữ fixture riêng cho demo/test; không upload seed/mock.
-- Làm rõ dữ liệu offline/đang theo dõi cần tồn tại cục bộ và cách đồng bộ.
+## Giai đoạn 4 — Auth end-to-end
+- Làm cho AuthService/AuthProvider tiêu dùng response DTO `user + session`, confirmation pending (HTTP 202/session null), refresh/expiry/logout.
+- Thêm recovery/reset password qua backend; thiết kế safe email enumeration response.
+- `ApiClient` gắn access token, single-flight refresh và retry có giới hạn; xử lý 401/403 rõ.
 
-## Giai đoạn 5 — Analytics, thông báo, độ tin cậy
-- Tính analytics từ dữ liệu thật; phân biệt ước lượng giai đoạn ngủ với dữ liệu thiết bị đo.
-- Xác minh lịch thông báo và quyền trên nền tảng được hỗ trợ.
-- Thêm kiểm thử model/serialization, provider/repository, API và phân quyền đa tài khoản.
+## Giai đoạn 5 — Hợp đồng dữ liệu và repository
+- Cập nhật migration riêng đã phê duyệt; chạy staging/backup/restore trước production.
+- Cập nhật model serialization/repositories và Express validation/routes theo contract mà không bỏ trường domain.
+- Dream CRUD, completed sleep CRUD, owner scope và pagination/filter; fixture tiếp tục chỉ cục bộ/test.
+- Giữ active tracking local ở bản đầu nếu chưa có quyết định sync đa thiết bị.
 
-## Giai đoạn 6 — Phát hành
-- Chạy analyzer, test, build các nền tảng mục tiêu; rà soát CORS/HTTPS/logging/secrets/RLS.
-- Kiểm tra migration trên môi trường không production trước khi triển khai có phê duyệt.
+## Giai đoạn 6 — Analytics, notification, kiểm chứng
+- Tính thống kê trên dữ liệu thật, ghi rõ stage là ước lượng.
+- Xác minh thông báo theo nền tảng và quyền.
+- Test serialization, validation, auth lifecycle, owner isolation/RLS, migration staging, analyzer/build mục tiêu.
 
-## Tiêu chí hoàn thành đề xuất
-- Tài liệu và luồng client/server/schema thống nhất.
-- Không còn token giả hoặc CRUD giả trong luồng người dùng được đánh dấu production.
-- Serialization tương thích với schema và API; dữ liệu owner-scoped.
-- Analyzer/test/build phù hợp mục tiêu thành công; không lộ secret và không seed dữ liệu demo lên Supabase.
+## Giai đoạn 7 — Phát hành
+- HTTPS, CORS production allowlist, rate limits theo nhóm route, redact logs, secrets rotation/monitoring.
+- Phê duyệt migration/release riêng; không seed fixture vào Supabase.
+
+## Cổng hoàn thành
+Không bắt đầu migration executable trước khi có inventory, quyết định các câu hỏi mở, backup/rollback và phê duyệt. Không đánh dấu CRUD/auth là live cho tới khi tích hợp và kiểm thử backend thật.
