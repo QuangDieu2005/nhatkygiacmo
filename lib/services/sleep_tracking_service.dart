@@ -63,6 +63,13 @@ class SleepTrackingService {
 
     _isStarting = true;
     try {
+      // Re-read durable state before writing so a caller that has not run init()
+      // cannot overwrite a recoverable active or pending session.
+      await init();
+      if (isTracking) {
+        throw StateError('An active or pending sleep session must be resolved first.');
+      }
+
       final now = DateTime.now();
       final session = SleepSessionModel(
         id: 'session_${now.millisecondsSinceEpoch}',

@@ -103,9 +103,6 @@ class SleepProvider extends ChangeNotifier {
     if (_isStopping) {
       throw const SleepTrackingStartException('Đang lưu phiên ngủ hiện tại.');
     }
-    if (isTracking) {
-      throw const SleepTrackingStartException('Phiên ngủ hiện tại vẫn đang theo dõi.');
-    }
 
     _isStarting = true;
     try {
@@ -138,6 +135,10 @@ class SleepProvider extends ChangeNotifier {
       } else if (_trackingService.activeSession != null) {
         throw const SleepTrackingStartException(
           'Đã có phiên ngủ cần được khôi phục trước khi bắt đầu phiên mới.',
+        );
+      } else if (isTracking) {
+        throw const SleepTrackingStartException(
+          'Phiên ngủ hiện tại vẫn đang theo dõi.',
         );
       }
 

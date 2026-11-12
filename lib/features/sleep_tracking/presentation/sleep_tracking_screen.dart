@@ -75,7 +75,7 @@ class _SleepTrackingScreenState extends State<SleepTrackingScreen> {
   }
 
   Future<void> _startTracking(SleepProvider provider) async {
-    if (_isStarting || _isStopping || provider.isTracking) return;
+    if (_isStarting || _isStopping) return;
     setState(() => _isStarting = true);
     try {
       await provider.startTracking();

@@ -121,3 +121,12 @@
 - Không đổi model, mock data, route, dependency, backend/API, Supabase/schema/database.
 - `git diff --check` chạy sau thay đổi. `dart format` và `flutter analyze --no-pub` được thử nhưng không phản hồi sau 30 giây, đã dừng; chưa xác minh analyzer hoặc runtime. Các kịch bản lỗi SharedPreferences/cleanup cần kiểm tra trên môi trường hỗ trợ.
 - Trước cleanup pending đã xác nhận trong `startTracking`, Provider upsert snapshot cũ vào Repository trước để bảo toàn lịch sử process-local; lỗi rehydrate cũng chặn phiên mới và giữ snapshot.
+
+## 2026-11-13 — Đợt 6B follow-up: báo lỗi bắt đầu và chặn ghi đè phiên phục hồi
+
+- Đối chiếu code tại `63fdbcc` như yêu cầu và phát hiện checkout hiện tại đã tiến tới `31d6b56` (`origin/main`) với phần lớn triển khai Đợt 6B. Không reset/checkout lùi để tránh mất lịch sử.
+- Giữ luồng cleanup pending đã xác nhận, cờ repository_saved, xác nhận lưu active SharedPreferences và preservation của `lastCompletedSession` từ checkout hiện tại.
+- Bổ sung để Provider đọc pending trước khi phân loại trạng thái active; pending chưa lưu được báo đúng là cần retry, pending đã lưu sẽ rehydrate/cleanup trước phiên mới. Bỏ guard UI phụ thuộc `provider.isTracking` có thể return im lặng; lỗi domain từ Provider được hiển thị qua snackbar hiện có.
+- Service tự reload persisted state bên trong `startSleepTracking` trước khi ghi, từ chối active/pending tồn tại và chỉ gán active trong memory sau khi `setString` trả true. Do đó lời gọi trực tiếp hoặc state chưa init cũng không ghi đè key có thể phục hồi.
+- File sửa: `lib/services/sleep_tracking_service.dart`, `lib/providers/sleep_provider.dart`, `lib/features/sleep_tracking/presentation/sleep_tracking_screen.dart`, `docs/TASK_LOG.md`. Không đổi repository/model/mock/routes/dependencies/backend/API/Supabase/schema/database.
+- `dart format lib/services/sleep_tracking_service.dart lib/providers/sleep_provider.dart lib/features/sleep_tracking/presentation/sleep_tracking_screen.dart` không có output sau 30 giây và đã dừng; chưa xác minh format. `flutter analyze --no-pub` cũng không có output sau 30 giây và đã dừng; chưa xác minh analyzer/runtime. `git diff --check` hoàn tất, không có lỗi whitespace (Git cảnh báo LF sẽ chuyển CRLF).
