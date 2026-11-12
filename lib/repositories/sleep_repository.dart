@@ -104,7 +104,13 @@ class SleepRepository {
 
   Future<void> addSession(SleepSessionModel session) async {
     await Future.delayed(const Duration(milliseconds: 200));
-    if (_sessions.any((existing) => existing.id == session.id)) return;
+    final existingIndex = _sessions.indexWhere((existing) => existing.id == session.id);
+    if (existingIndex >= 0) {
+      // Treat retries as an upsert so the stored value and Provider use the
+      // exact same snapshot, without creating a duplicate row.
+      _sessions[existingIndex] = session;
+      return;
+    }
     _sessions.insert(0, session);
   }
 

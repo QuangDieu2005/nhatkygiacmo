@@ -9,12 +9,19 @@ class SleepTrackingService {
   static final SleepTrackingService instance = SleepTrackingService._();
 
   SleepSessionModel? _activeSession;
+  SleepSessionModel? _pendingCompletedSession;
+  bool _pendingCompletedSessionSaved = false;
 
   SleepSessionModel? get activeSession => _activeSession;
-  bool get isTracking => _activeSession != null;
+  SleepSessionModel? get pendingCompletedSession => _pendingCompletedSession;
+  bool get isPendingCompletedSessionSaved => _pendingCompletedSessionSaved;
+  bool get isTracking => _activeSession != null || _pendingCompletedSession != null;
 
   Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
+    _activeSession = null;
+    _pendingCompletedSession = null;
+    _pendingCompletedSessionSaved = false;
     final sessionJson = prefs.getString(AppConstants.prefActiveSession);
     if (sessionJson != null) {
       try {
@@ -23,9 +30,31 @@ class SleepTrackingService {
         _activeSession = null;
       }
     }
+
+    final pendingJson = prefs.getString(AppConstants.prefPendingCompletedSession);
+    if (pendingJson != null) {
+      try {
+        final decoded = jsonDecode(pendingJson) as Map<String, dynamic>;
+        final snapshot = decoded[AppConstants.pendingSleepSnapshotField];
+        if (snapshot is Map<String, dynamic>) {
+          _pendingCompletedSession = SleepSessionModel.fromJson(snapshot);
+          _pendingCompletedSessionSaved =
+              decoded[AppConstants.pendingSleepRepositorySavedField] == true;
+        } else {
+          // Read pending snapshots written before the durable status envelope.
+          _pendingCompletedSession = SleepSessionModel.fromJson(decoded);
+          _pendingCompletedSessionSaved = false;
+        }
+      } catch (_) {
+        _pendingCompletedSession = null;
+        _pendingCompletedSessionSaved = false;
+      }
+    }
   }
 
   Future<SleepSessionModel> startSleepTracking({String userId = 'user_01'}) async {
+    if (isTracking) return _activeSession ?? _pendingCompletedSession!;
+
     final session = SleepSessionModel(
       id: 'session_${DateTime.now().millisecondsSinceEpoch}',
       userId: userId,
@@ -42,8 +71,43 @@ class SleepTrackingService {
   }
 
   /// Builds a completed snapshot without ending or persisting the active state.
-  /// The caller must save it to the repository before calling [clearActiveSession].
+  /// The snapshot is persisted and reused until [clearActiveSession] succeeds.
   Future<SleepSessionModel?> prepareCompletedSession({String? notes}) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (_pendingCompletedSession == null) {
+      final savedPending = prefs.getString(AppConstants.prefPendingCompletedSession);
+      if (savedPending != null) {
+        try {
+          final decoded = jsonDecode(savedPending) as Map<String, dynamic>;
+          final snapshot = decoded[AppConstants.pendingSleepSnapshotField];
+          if (snapshot is Map<String, dynamic>) {
+            _pendingCompletedSession = SleepSessionModel.fromJson(snapshot);
+            _pendingCompletedSessionSaved =
+                decoded[AppConstants.pendingSleepRepositorySavedField] == true;
+          } else {
+            _pendingCompletedSession = SleepSessionModel.fromJson(decoded);
+            _pendingCompletedSessionSaved = false;
+          }
+        } catch (_) {
+          _pendingCompletedSession = null;
+          _pendingCompletedSessionSaved = false;
+        }
+      }
+    }
+
+    if (_pendingCompletedSession != null) {
+      final pendingJson = _encodePendingSnapshot();
+      final persisted = await prefs.setString(
+        AppConstants.prefPendingCompletedSession,
+        pendingJson,
+      );
+      if (!persisted) {
+        throw StateError('Could not persist the pending completed sleep session.');
+      }
+      return _pendingCompletedSession;
+    }
+
     if (_activeSession == null) return null;
 
     final endTime = DateTime.now();
@@ -64,19 +128,62 @@ class SleepTrackingService {
       remSleepMinutes: (durationMinutes * 0.20).toInt(),
     );
 
+    // Keep this exact value in memory before awaiting storage so retries in the
+    // same process cannot generate a different endTime or duration.
+    _pendingCompletedSession = completedSession;
+    final persisted = await prefs.setString(
+      AppConstants.prefPendingCompletedSession,
+      _encodePendingSnapshot(),
+    );
+    if (!persisted) {
+      throw StateError('Could not persist the pending completed sleep session.');
+    }
+
     return completedSession;
   }
 
-  /// Clears the recoverable active session after its completed snapshot is saved.
-  Future<void> clearActiveSession() async {
-    if (_activeSession == null) return;
+  /// Records that the repository accepted the pending snapshot. This marker
+  /// lets startup distinguish a completed session from one that needs retry.
+  Future<void> markPendingCompletedSessionSaved() async {
+    if (_pendingCompletedSession == null) {
+      throw StateError('There is no pending completed sleep session to mark.');
+    }
     final prefs = await SharedPreferences.getInstance();
-    final removed = await prefs.remove(AppConstants.prefActiveSession);
-    if (!removed && prefs.containsKey(AppConstants.prefActiveSession)) {
+    _pendingCompletedSessionSaved = true;
+    final saved = await prefs.setString(
+      AppConstants.prefPendingCompletedSession,
+      _encodePendingSnapshot(),
+    );
+    if (!saved) {
+      _pendingCompletedSessionSaved = false;
+      throw StateError('Could not persist the repository confirmation marker.');
+    }
+  }
+
+  /// Clears active and pending state only after the repository save succeeds.
+  Future<void> clearActiveSession() async {
+    if (_activeSession == null && _pendingCompletedSession == null) return;
+    if (_pendingCompletedSession != null && !_pendingCompletedSessionSaved) {
+      throw StateError('Cannot clear an active session before its snapshot is saved.');
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final activeRemoved = await prefs.remove(AppConstants.prefActiveSession);
+    if (!activeRemoved && prefs.containsKey(AppConstants.prefActiveSession)) {
       throw StateError('Could not clear the persisted active sleep session.');
     }
+    final pendingRemoved = await prefs.remove(AppConstants.prefPendingCompletedSession);
+    if (!pendingRemoved && prefs.containsKey(AppConstants.prefPendingCompletedSession)) {
+      throw StateError('Could not clear the pending completed sleep session.');
+    }
     _activeSession = null;
+    _pendingCompletedSession = null;
+    _pendingCompletedSessionSaved = false;
   }
+
+  String _encodePendingSnapshot() => jsonEncode({
+        AppConstants.pendingSleepSnapshotField: _pendingCompletedSession!.toJson(),
+        AppConstants.pendingSleepRepositorySavedField: _pendingCompletedSessionSaved,
+      });
 
   int _calculateQualityScore(int durationMinutes) {
     final hours = durationMinutes / 60.0;

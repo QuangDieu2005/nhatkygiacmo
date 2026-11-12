@@ -21,6 +21,9 @@ class AppConstants {
   static const String prefAuthToken = 'pref_auth_token';
   static const String prefSleepGoal = 'pref_sleep_goal';
   static const String prefActiveSession = 'pref_active_sleep_session';
+  static const String prefPendingCompletedSession = 'pref_pending_completed_sleep_session';
+  static const String pendingSleepSnapshotField = 'snapshot';
+  static const String pendingSleepRepositorySavedField = 'repository_saved';
 
   // API & Supabase placeholders
   static const String apiBaseUrl = 'http://localhost:5000/api';

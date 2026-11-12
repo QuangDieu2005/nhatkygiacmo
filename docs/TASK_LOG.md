@@ -96,3 +96,18 @@
 - Repository ném lỗi thì exception được trả về UI; Provider và service không đổi active session, timer tiếp tục dựa trên `startTime` ban đầu và có thể thử lại. Repository bỏ qua bản ghi có cùng ID để thao tác thử lại không chèn bản sao nếu lần trước đã lưu nhưng bước xóa active bị gián đoạn. Provider cũng khóa start/stop trùng đồng thời.
 - UI Sleep Tracking giữ nguyên thiết kế hiện tại; cảnh báo lỗi lưu được reset khi người dùng thử kết thúc lại. Cập nhật này không thay model, dữ liệu mẫu, API/backend, Supabase, schema hay database.
 - Các kịch bản start/stop/lưu lỗi/thử lại/khởi động lại/nhấn lặp chưa thể chạy tự động trong môi trường này: `dart format` trên các file Dart đã sửa và `flutter analyze --no-pub` đều không có output trong 30 giây và đã dừng theo yêu cầu; chưa có kết quả analyzer hoặc test runtime. `git diff --check` chạy riêng sau cập nhật log.
+
+## 2026-11-12 — Ổn định snapshot khi thử lưu lại phiên ngủ
+
+- Đọc lại hướng dẫn/context/data contract/task log và kiểm tra luồng Service → Repository → Provider → UI.
+- `SleepTrackingService` nay tạo snapshot hoàn tất một lần, lưu JSON ở SharedPreferences key riêng và tái sử dụng đúng snapshot trong các lần retry. `init()` phục hồi snapshot đang chờ sau khởi động lại. Snapshot và active key chỉ được xóa sau khi Repository xác nhận lưu.
+- Nếu xóa một trong các key sau khi lưu thành công bị lỗi, Service giữ cache và key còn lại để lần sau tiếp tục. Provider phục hồi pending snapshot, đóng băng thời lượng hiển thị theo snapshot, giữ active state khi repository/finalize lỗi và chỉ chuyển sang completed khi cleanup hoàn tất.
+- `SleepRepository.addSession` nay upsert theo ID: retry không tạo bản ghi thứ hai, đồng thời giá trị đã lưu được đồng bộ chính xác với snapshot mà Provider hoàn tất. Điều này cũng xử lý bản ghi cùng ID có snapshot cũ từ phiên bản trước.
+- File sửa: `lib/core/constants/app_constants.dart`, `lib/services/sleep_tracking_service.dart`, `lib/providers/sleep_provider.dart`, `lib/repositories/sleep_repository.dart`, `docs/TASK_LOG.md`. Không đổi model, UI trong nhiệm vụ này, dependencies, backend/API, Supabase, schema/database.
+- Các kịch bản lưu lỗi/thử lại, lỗi cleanup, phục hồi sau restart, cùng snapshot Provider/Repository và nhấn lặp chưa được chạy runtime. `dart format` và `flutter analyze --no-pub` không phản hồi sau 30 giây và đã dừng; kết quả chưa xác minh. `git diff --check` hoàn tất sau cập nhật log.
+
+### Rà soát trước khi push — snapshot upsert và phục hồi trạng thái hoàn tất
+
+- Xác minh `SleepRepository.addSession` thay thế giá trị có cùng ID bằng chính object snapshot được truyền vào; Provider cũng gán cùng snapshot làm `lastCompletedSession`, nên dữ liệu hai phía khớp hoàn toàn trong implementation hiện tại.
+- Phát hiện và sửa trường hợp active key đã xóa nhưng pending key còn lại: thêm trường `repository_saved` trong JSON snapshot trên cùng SharedPreferences key, được ghi sau khi Repository lưu. Startup nhận diện pending đã xác nhận, upsert lại cùng snapshot để khôi phục history của repository process-local, hiển thị completed thay vì tracking, rồi thử cleanup. Trạng thái xác nhận và snapshot được xóa cùng một key; nếu cleanup key lỗi, startup vẫn biết snapshot đã được Repository xác nhận.
+- Nếu khôi phục/upsert Repository ở startup thất bại, pending giữ trạng thái có thể thử lại thay vì báo hoàn tất. Không đổi API/schema/database.

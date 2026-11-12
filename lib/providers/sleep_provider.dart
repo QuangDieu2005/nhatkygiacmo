@@ -31,9 +31,36 @@ class SleepProvider extends ChangeNotifier {
 
   Future<void> init() async {
     await _trackingService.init();
-    _activeSession = _trackingService.activeSession;
-    if (_activeSession != null) {
-      _startElapsedTimer();
+    final pending = _trackingService.pendingCompletedSession;
+    if (pending != null && _trackingService.isPendingCompletedSessionSaved) {
+      try {
+        // Re-apply the confirmed ID as an upsert so repositories that are
+        // process-local can rebuild their current history from the durable snapshot.
+        await _repository.addSession(pending);
+        _lastCompletedSession = pending;
+        try {
+          await _trackingService.clearActiveSession();
+        } catch (_) {
+          // Repository confirmation remains authoritative; stale preference
+          // cleanup can be retried on the next initialization.
+        }
+      } catch (_) {
+        // If repository restoration fails, retain the pending session as a
+        // retryable state instead of reporting it as completed.
+        _activeSession = _trackingService.activeSession ?? pending;
+        _currentElapsed = Duration(minutes: pending.totalMinutes);
+      }
+    } else {
+      _activeSession = _trackingService.activeSession ?? pending;
+    }
+    if (_lastCompletedSession == null) {
+      if (pending != null) {
+        // A pending snapshot represents an already ended interval. Keep its
+        // displayed duration fixed while allowing the user to retry the save.
+        _currentElapsed = Duration(minutes: pending.totalMinutes);
+      } else if (_activeSession != null) {
+        _startElapsedTimer();
+      }
     }
     await loadSessions();
   }
@@ -87,8 +114,14 @@ class SleepProvider extends ChangeNotifier {
       final completed = await _trackingService.prepareCompletedSession(notes: notes);
       if (completed == null) return null;
 
+      // The snapshot is immutable across retries, so freeze the elapsed display
+      // at the same duration represented by that snapshot.
+      _elapsedTimer?.cancel();
+      _currentElapsed = Duration(minutes: completed.totalMinutes);
+
       // Keep both provider and persisted active state intact unless saving succeeds.
       await _repository.addSession(completed);
+      await _trackingService.markPendingCompletedSessionSaved();
       await _trackingService.clearActiveSession();
 
       _elapsedTimer?.cancel();
