@@ -1,18 +1,27 @@
 import 'package:flutter/material.dart';
+
 import '../models/dream_model.dart';
 import '../repositories/dream_repository.dart';
 
 class DreamProvider extends ChangeNotifier {
-  final DreamRepository _repository = DreamRepository.instance;
+  DreamProvider({DreamDataRepository? repository})
+    : _repository = repository ?? DreamRepository.instance;
+
+  final DreamDataRepository _repository;
 
   List<DreamModel> _dreams = [];
   bool _isLoading = false;
+  bool _hasLoaded = false;
+  bool _hasSuccessfulLoad = false;
   String? _errorMessage;
+  int _loadRequest = 0;
   String _searchQuery = '';
   EmotionType? _selectedEmotion;
 
   List<DreamModel> get allDreams => _dreams;
   bool get isLoading => _isLoading;
+  bool get hasLoaded => _hasLoaded;
+  bool get hasSuccessfulLoad => _hasSuccessfulLoad;
   String? get errorMessage => _errorMessage;
   String get searchQuery => _searchQuery;
   EmotionType? get selectedEmotion => _selectedEmotion;
@@ -37,16 +46,23 @@ class DreamProvider extends ChangeNotifier {
   }
 
   Future<void> loadDreams() async {
+    final request = ++_loadRequest;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      _dreams = await _repository.getAllDreams();
+      final loadedDreams = await _repository.getAllDreams();
+      if (request != _loadRequest) return;
+      _dreams = loadedDreams;
       _isLoading = false;
+      _hasLoaded = true;
+      _hasSuccessfulLoad = true;
       notifyListeners();
     } catch (e) {
+      if (request != _loadRequest) return;
       _isLoading = false;
+      _hasLoaded = true;
       _errorMessage = 'Không thể tải danh sách giấc mơ';
       notifyListeners();
     }

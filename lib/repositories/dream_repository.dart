@@ -1,6 +1,14 @@
 import '../models/dream_model.dart';
 
-class DreamRepository {
+abstract interface class DreamDataRepository {
+  Future<List<DreamModel>> getAllDreams();
+  Future<DreamModel?> getDreamById(String id);
+  Future<void> addDream(DreamModel dream);
+  Future<void> updateDream(DreamModel dream);
+  Future<void> deleteDream(String id);
+}
+
+class DreamRepository implements DreamDataRepository {
   DreamRepository._();
   static final DreamRepository instance = DreamRepository._();
 
@@ -132,11 +140,13 @@ class DreamRepository {
   // - Gọi ApiService.instance.fetchDreams()
   // - Hoặc Supabase.instance.client.from('dreams').select()
 
+  @override
   Future<List<DreamModel>> getAllDreams() async {
     await Future.delayed(const Duration(milliseconds: 200));
     return List.unmodifiable(_dreams);
   }
 
+  @override
   Future<DreamModel?> getDreamById(String id) async {
     await Future.delayed(const Duration(milliseconds: 100));
     try {
@@ -146,11 +156,13 @@ class DreamRepository {
     }
   }
 
+  @override
   Future<void> addDream(DreamModel dream) async {
     await Future.delayed(const Duration(milliseconds: 200));
     _dreams.insert(0, dream);
   }
 
+  @override
   Future<void> updateDream(DreamModel dream) async {
     await Future.delayed(const Duration(milliseconds: 200));
     final index = _dreams.indexWhere((d) => d.id == dream.id);
@@ -159,6 +171,7 @@ class DreamRepository {
     }
   }
 
+  @override
   Future<void> deleteDream(String id) async {
     await Future.delayed(const Duration(milliseconds: 200));
     _dreams.removeWhere((d) => d.id == id);

@@ -6,18 +6,45 @@ import '../../../core/constants/app_colors.dart';
 import '../../../models/dream_model.dart';
 import '../../../models/sleep_session_model.dart';
 import '../../../models/sleep_statistics_model.dart';
+import '../../../providers/dream_provider.dart';
 import '../../../providers/sleep_provider.dart';
 
-class AnalyticsScreen extends StatelessWidget {
+class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
+
+  @override
+  State<AnalyticsScreen> createState() => _AnalyticsScreenState();
+}
+
+class _AnalyticsScreenState extends State<AnalyticsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final sleep = context.read<SleepProvider>();
+      if (!sleep.isLoading && !sleep.hasLoadedSessions) {
+        _reload(sleep);
+      }
+    });
+  }
+
+  Future<void> _reload(SleepProvider provider) {
+    final dreams = context.read<DreamProvider>();
+    return provider.loadSessions(
+      dreams: dreams.hasSuccessfulLoad ? dreams.allDreams : null,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<SleepProvider>();
-    final sessions = provider.sessions
-        .where((session) => !session.isTracking && session.endTime != null)
-        .toList()
-      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    final dreamProvider = context.watch<DreamProvider>();
+    final sessions =
+        provider.sessions
+            .where((session) => !session.isTracking && session.endTime != null)
+            .toList()
+          ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Thống kê giấc ngủ')),
@@ -25,7 +52,11 @@ class AnalyticsScreen extends StatelessWidget {
         decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
         child: SafeArea(
           child: RefreshIndicator(
-            onRefresh: provider.loadSessions,
+            onRefresh: () => provider.loadSessions(
+              dreams: dreamProvider.hasSuccessfulLoad
+                  ? dreamProvider.allDreams
+                  : null,
+            ),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final width = constraints.maxWidth;
@@ -36,15 +67,28 @@ class AnalyticsScreen extends StatelessWidget {
                     Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 760),
-                        child: provider.isLoading && sessions.isEmpty
+                        child:
+                            (provider.isLoading ||
+                                    !provider.hasLoadedStatistics) &&
+                                !provider.hasSuccessfulStatisticsLoad &&
+                                provider.statisticsErrorMessage == null &&
+                                provider.sessionsErrorMessage == null
                             ? const _LoadingState()
+                            : provider.sessionsErrorMessage != null ||
+                                  provider.statisticsErrorMessage != null
+                            ? _ErrorState(
+                                message:
+                                    provider.sessionsErrorMessage ??
+                                    provider.statisticsErrorMessage!,
+                                onRetry: () => _reload(provider),
+                              )
                             : sessions.isEmpty
-                                ? const _EmptyState()
-                                : _AnalyticsContent(
-                                    sessions: sessions,
-                                    columns: width >= 560 ? 4 : 2,
-                                    statistics: provider.statistics,
-                                  ),
+                            ? const _EmptyState()
+                            : _AnalyticsContent(
+                                sessions: sessions,
+                                columns: width >= 560 ? 4 : 2,
+                                statistics: provider.statistics,
+                              ),
                       ),
                     ),
                   ],
@@ -71,10 +115,14 @@ class _AnalyticsContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalMinutes = sessions.fold<int>(0, (sum, item) => sum + item.totalMinutes);
+    final totalMinutes = sessions.fold<int>(
+      0,
+      (sum, item) => sum + item.totalMinutes,
+    );
     final averageMinutes = (totalMinutes / sessions.length).round();
     final averageQuality =
-        (sessions.fold<int>(0, (sum, item) => sum + item.qualityScore) / sessions.length)
+        (sessions.fold<int>(0, (sum, item) => sum + item.qualityScore) /
+                sessions.length)
             .round();
     final longest = sessions.reduce(
       (a, b) => a.totalMinutes >= b.totalMinutes ? a : b,
@@ -161,48 +209,54 @@ class _PageIntro extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: AppColors.cardGradient,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.primary.withOpacity(.24)),
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      gradient: AppColors.cardGradient,
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: AppColors.primary.withOpacity(.24)),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(.16),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Icon(
+            Icons.nights_stay_rounded,
+            color: AppColors.primaryLight,
+          ),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(.16),
-                borderRadius: BorderRadius.circular(16),
+        const SizedBox(width: 14),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Nhịp nghỉ ngơi của bạn',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              child: const Icon(Icons.nights_stay_rounded,
-                  color: AppColors.primaryLight),
-            ),
-            const SizedBox(width: 14),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Nhịp nghỉ ngơi của bạn',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      )),
-                  SizedBox(height: 4),
-                  Text('Tổng hợp từ các phiên ngủ đã hoàn tất.',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                        height: 1.4,
-                      )),
-                ],
+              SizedBox(height: 4),
+              Text(
+                'Tổng hợp từ các phiên ngủ đã hoàn tất.',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _MetricData {
@@ -257,75 +311,98 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(data.icon, color: data.tint, size: 21),
-            const SizedBox(height: 13),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(data.value,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 23,
-                        fontWeight: FontWeight.w700,
-                      )),
-                  if (data.suffix.isNotEmpty)
-                    Text(data.suffix,
-                        style: const TextStyle(
-                            color: AppColors.textMuted, fontSize: 12)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(data.label,
+    padding: const EdgeInsets.all(15),
+    decoration: BoxDecoration(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: AppColors.divider),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(data.icon, color: data.tint, size: 21),
+        const SizedBox(height: 13),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                data.value,
                 style: const TextStyle(
-                    color: AppColors.textSecondary, fontSize: 12, height: 1.3)),
-          ],
+                  color: AppColors.textPrimary,
+                  fontSize: 23,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (data.suffix.isNotEmpty)
+                Text(
+                  data.suffix,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+            ],
+          ),
         ),
-      );
+        const SizedBox(height: 5),
+        Text(
+          data.label,
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 12,
+            height: 1.3,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, required this.subtitle, required this.icon});
+  const _SectionTitle({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
   final String title;
   final String subtitle;
   final IconData icon;
 
   @override
   Widget build(BuildContext context) => Row(
-        children: [
-          Icon(icon, size: 20, color: AppColors.primaryLight),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                Text(subtitle,
-                    style: const TextStyle(
-                        color: AppColors.textMuted, fontSize: 12, height: 1.3)),
-              ],
+    children: [
+      Icon(icon, size: 20, color: AppColors.primaryLight),
+      const SizedBox(width: 9),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-        ],
-      );
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 12,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
 }
 
 class _DurationChart extends StatelessWidget {
@@ -348,8 +425,13 @@ class _DurationChart extends StatelessWidget {
           barTouchData: BarTouchData(
             touchTooltipData: BarTouchTooltipData(
               getTooltipItem: (group, groupIndex, rod, rodIndex) =>
-                  BarTooltipItem('${rod.toY.toStringAsFixed(1)} giờ',
-                      const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                  BarTooltipItem(
+                    '${rod.toY.toStringAsFixed(1)} giờ',
+                    const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
             ),
           ),
           gridData: _gridData(2),
@@ -367,7 +449,9 @@ class _DurationChart extends StatelessWidget {
                   BarChartRodData(
                     toY: daily[i].session.totalMinutes / 60,
                     width: daily.length > 5 ? 16 : 22,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(7),
+                    ),
                     gradient: AppColors.sleepGradient,
                     backDrawRodData: BackgroundBarChartRodData(
                       show: true,
@@ -400,10 +484,15 @@ class _QualityChart extends StatelessWidget {
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
               getTooltipItems: (spots) => spots
-                  .map((spot) => LineTooltipItem(
-                        '${spot.y.round()}/100',
-                        const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                      ))
+                  .map(
+                    (spot) => LineTooltipItem(
+                      '${spot.y.round()}/100',
+                      const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
           ),
@@ -418,7 +507,10 @@ class _QualityChart extends StatelessWidget {
             LineChartBarData(
               spots: [
                 for (var i = 0; i < daily.length; i++)
-                  FlSpot(i.toDouble(), daily[i].session.qualityScore.toDouble()),
+                  FlSpot(
+                    i.toDouble(),
+                    daily[i].session.qualityScore.toDouble(),
+                  ),
               ],
               isCurved: true,
               color: AppColors.starGold,
@@ -452,11 +544,13 @@ class _SleepStages extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final recorded = sessions
-        .where((session) =>
-            session.deepSleepMinutes +
-                session.lightSleepMinutes +
-                session.remSleepMinutes >
-            0)
+        .where(
+          (session) =>
+              session.deepSleepMinutes +
+                  session.lightSleepMinutes +
+                  session.remSleepMinutes >
+              0,
+        )
         .toList();
     if (recorded.isEmpty) {
       return const _EmptyCard(
@@ -464,9 +558,18 @@ class _SleepStages extends StatelessWidget {
         message: 'Chưa có phiên nào ghi nhận thời lượng các giai đoạn ngủ.',
       );
     }
-    final deep = recorded.fold<int>(0, (sum, item) => sum + item.deepSleepMinutes);
-    final light = recorded.fold<int>(0, (sum, item) => sum + item.lightSleepMinutes);
-    final rem = recorded.fold<int>(0, (sum, item) => sum + item.remSleepMinutes);
+    final deep = recorded.fold<int>(
+      0,
+      (sum, item) => sum + item.deepSleepMinutes,
+    );
+    final light = recorded.fold<int>(
+      0,
+      (sum, item) => sum + item.lightSleepMinutes,
+    );
+    final rem = recorded.fold<int>(
+      0,
+      (sum, item) => sum + item.remSleepMinutes,
+    );
     final total = deep + light + rem;
     final parts = [
       _StageData('Ngủ sâu', deep, AppColors.primaryLight),
@@ -494,9 +597,10 @@ class _SleepStages extends StatelessWidget {
                         radius: 28,
                         title: '${(part.minutes * 100 / total).round()}%',
                         titleStyle: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700),
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                 ],
               ),
@@ -510,8 +614,10 @@ class _SleepStages extends StatelessWidget {
             ],
           const Align(
             alignment: Alignment.centerLeft,
-            child: Text('Tổng hợp thời lượng đã ghi nhận; không phải phép đo y tế.',
-                style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+            child: Text(
+              'Tổng hợp thời lượng đã ghi nhận; không phải phép đo y tế.',
+              style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+            ),
           ),
         ],
       ),
@@ -573,9 +679,13 @@ class _EmotionChart extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 7),
-                    Text('${entry.key.label} (${entry.value})',
-                        style: const TextStyle(
-                            color: AppColors.textSecondary, fontSize: 12)),
+                    Text(
+                      '${entry.key.label} (${entry.value})',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
             ],
@@ -600,26 +710,36 @@ class _StageLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: [
-          Container(
-              width: 9,
-              height: 9,
-              decoration: BoxDecoration(color: part.color, shape: BoxShape.circle)),
-          const SizedBox(width: 9),
-          Expanded(
-              child: Text(part.label,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 13))),
-          Text('${_formatDuration(part.minutes)} · ${(part.minutes * 100 / total).round()}%',
-              style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600)),
-        ],
-      );
+    children: [
+      Container(
+        width: 9,
+        height: 9,
+        decoration: BoxDecoration(color: part.color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 9),
+      Expanded(
+        child: Text(
+          part.label,
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+      ),
+      Text(
+        '${_formatDuration(part.minutes)} · ${(part.minutes * 100 / total).round()}%',
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ],
+  );
 }
 
 class _ObservationCard extends StatelessWidget {
-  const _ObservationCard({required this.sessions, required this.averageMinutes});
+  const _ObservationCard({
+    required this.sessions,
+    required this.averageMinutes,
+  });
   final List<SleepSessionModel> sessions;
   final int averageMinutes;
 
@@ -631,7 +751,7 @@ class _ObservationCard extends StatelessWidget {
     final trendText = qualityTrend == 0
         ? 'Điểm chất lượng ở hai bản ghi đầu và gần nhất bằng nhau.'
         : 'Điểm ở bản ghi gần nhất ${qualityTrend > 0 ? 'cao hơn' : 'thấp hơn'} '
-            '${qualityTrend.abs()} điểm so với bản ghi đầu tiên.';
+              '${qualityTrend.abs()} điểm so với bản ghi đầu tiên.';
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -642,24 +762,33 @@ class _ObservationCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.auto_awesome_outlined,
-              color: AppColors.primaryLight, size: 21),
+          const Icon(
+            Icons.auto_awesome_outlined,
+            color: AppColors.primaryLight,
+            size: 21,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Ghi nhận từ dữ liệu',
-                    style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700)),
+                const Text(
+                  'Ghi nhận từ dữ liệu',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 5),
                 Text(
                   'Trung bình ${_formatDuration(averageMinutes)} mỗi đêm trong '
                   '${sessions.length} đêm. $trendText',
                   style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 12, height: 1.45),
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    height: 1.45,
+                  ),
                 ),
               ],
             ),
@@ -677,11 +806,11 @@ class _ChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        height: height,
-        padding: const EdgeInsets.fromLTRB(10, 18, 16, 12),
-        decoration: _cardDecoration(),
-        child: child,
-      );
+    height: height,
+    padding: const EdgeInsets.fromLTRB(10, 18, 16, 12),
+    decoration: _cardDecoration(),
+    child: child,
+  );
 }
 
 class _LoadingState extends StatelessWidget {
@@ -689,9 +818,32 @@ class _LoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 100),
-        child: Center(child: CircularProgressIndicator()),
-      );
+    padding: EdgeInsets.symmetric(vertical: 100),
+    child: Center(child: CircularProgressIndicator()),
+  );
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 60),
+    child: Column(
+      children: [
+        _EmptyCard(icon: Icons.cloud_off_rounded, message: message),
+        const SizedBox(height: 12),
+        TextButton.icon(
+          onPressed: onRetry,
+          icon: const Icon(Icons.refresh_rounded),
+          label: const Text('Thử tải lại'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _EmptyState extends StatelessWidget {
@@ -699,12 +851,12 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 60),
-        child: _EmptyCard(
-          icon: Icons.nights_stay_outlined,
-          message: 'Chưa có phiên ngủ hoàn tất để tổng hợp.',
-        ),
-      );
+    padding: EdgeInsets.symmetric(vertical: 60),
+    child: _EmptyCard(
+      icon: Icons.nights_stay_outlined,
+      message: 'Chưa có phiên ngủ hoàn tất để tổng hợp.',
+    ),
+  );
 }
 
 class _EmptyCard extends StatelessWidget {
@@ -714,83 +866,102 @@ class _EmptyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(22),
-        decoration: _cardDecoration(),
-        child: Column(
-          children: [
-            Icon(icon, color: AppColors.textMuted, size: 30),
-            const SizedBox(height: 10),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: AppColors.textSecondary, fontSize: 13, height: 1.4)),
-          ],
+    width: double.infinity,
+    padding: const EdgeInsets.all(22),
+    decoration: _cardDecoration(),
+    child: Column(
+      children: [
+        Icon(icon, color: AppColors.textMuted, size: 30),
+        const SizedBox(height: 10),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 13,
+            height: 1.4,
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 List<({DateTime date, SleepSessionModel session})> _dailySessions(
-    List<SleepSessionModel> sessions) {
+  List<SleepSessionModel> sessions,
+) {
   final byDay = <DateTime, SleepSessionModel>{};
   for (final session in sessions) {
-    final date = DateTime(session.startTime.year, session.startTime.month, session.startTime.day);
+    final date = DateTime(
+      session.startTime.year,
+      session.startTime.month,
+      session.startTime.day,
+    );
     final previous = byDay[date];
     if (previous == null || session.totalMinutes > previous.totalMinutes) {
       byDay[date] = session;
     }
   }
-  final entries = byDay.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
-  final recent = entries.length > 7 ? entries.sublist(entries.length - 7) : entries;
-  return recent.map((entry) => (date: entry.key, session: entry.value)).toList();
+  final entries = byDay.entries.toList()
+    ..sort((a, b) => a.key.compareTo(b.key));
+  final recent = entries.length > 7
+      ? entries.sublist(entries.length - 7)
+      : entries;
+  return recent
+      .map((entry) => (date: entry.key, session: entry.value))
+      .toList();
 }
 
-String _dayLabel(List<({DateTime date, SleepSessionModel session})> days, double value) {
+String _dayLabel(
+  List<({DateTime date, SleepSessionModel session})> days,
+  double value,
+) {
   final index = value.toInt();
   if (value != index.toDouble() || index < 0 || index >= days.length) return '';
   return '${days[index].date.day}/${days[index].date.month}';
 }
 
 FlGridData _gridData(double interval) => FlGridData(
-      show: true,
-      drawVerticalLine: false,
-      horizontalInterval: interval,
-      getDrawingHorizontalLine: (_) =>
-          const FlLine(color: AppColors.divider, strokeWidth: 1),
-    );
+  show: true,
+  drawVerticalLine: false,
+  horizontalInterval: interval,
+  getDrawingHorizontalLine: (_) =>
+      const FlLine(color: AppColors.divider, strokeWidth: 1),
+);
 
 FlTitlesData _chartTitles({
   required double maxY,
   required double interval,
   required String Function(double) bottom,
-}) =>
-    FlTitlesData(
-      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-      leftTitles: AxisTitles(
-        sideTitles: SideTitles(
-          showTitles: true,
-          reservedSize: 34,
-          interval: interval,
-          getTitlesWidget: (value, _) => Text(
-            maxY <= 12 ? '${value.toInt()}h' : '${value.toInt()}',
-            style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
-          ),
+}) => FlTitlesData(
+  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+  leftTitles: AxisTitles(
+    sideTitles: SideTitles(
+      showTitles: true,
+      reservedSize: 34,
+      interval: interval,
+      getTitlesWidget: (value, _) => Text(
+        maxY <= 12 ? '${value.toInt()}h' : '${value.toInt()}',
+        style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
+      ),
+    ),
+  ),
+  bottomTitles: AxisTitles(
+    sideTitles: SideTitles(
+      showTitles: true,
+      interval: 1,
+      reservedSize: 26,
+      getTitlesWidget: (value, _) => Padding(
+        padding: const EdgeInsets.only(top: 7),
+        child: Text(
+          bottom(value),
+          style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
         ),
       ),
-      bottomTitles: AxisTitles(
-        sideTitles: SideTitles(
-          showTitles: true,
-          interval: 1,
-          reservedSize: 26,
-          getTitlesWidget: (value, _) => Padding(
-            padding: const EdgeInsets.only(top: 7),
-            child: Text(bottom(value),
-                style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
-          ),
-        ),
-      ),
-    );
+    ),
+  ),
+);
 
 String _formatDuration(int minutes) {
   final hours = minutes ~/ 60;
@@ -801,7 +972,7 @@ String _formatDuration(int minutes) {
 }
 
 BoxDecoration _cardDecoration() => BoxDecoration(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: AppColors.divider),
-    );
+  color: AppColors.surface,
+  borderRadius: BorderRadius.circular(20),
+  border: Border.all(color: AppColors.divider),
+);

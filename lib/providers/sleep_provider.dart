@@ -35,6 +35,16 @@ class SleepProvider extends ChangeNotifier {
   SleepStatisticsModel _statistics = SleepStatisticsModel.empty();
 
   bool _isLoading = false;
+  bool _isLoadingSessions = false;
+  bool _isLoadingStatistics = false;
+  bool _hasLoadedSessions = false;
+  bool _hasLoadedStatistics = false;
+  bool _hasSuccessfulSessionsLoad = false;
+  bool _hasSuccessfulStatisticsLoad = false;
+  String? _sessionsErrorMessage;
+  String? _statisticsErrorMessage;
+  List<DreamModel>? _statisticsDreams;
+  int _loadRequest = 0;
   bool _isStarting = false;
   bool _isStopping = false;
   Timer? _elapsedTimer;
@@ -50,6 +60,15 @@ class SleepProvider extends ChangeNotifier {
   SleepStatisticsModel get statistics => _statistics;
   bool get isTracking => _activeSession != null;
   bool get isLoading => _isLoading;
+  bool get isLoadingSessions => _isLoadingSessions;
+  bool get isLoadingStatistics => _isLoadingStatistics;
+  bool get hasLoadedSessions => _hasLoadedSessions;
+  bool get hasLoadedStatistics => _hasLoadedStatistics;
+  bool get hasSuccessfulSessionsLoad => _hasSuccessfulSessionsLoad;
+  bool get hasSuccessfulStatisticsLoad => _hasSuccessfulStatisticsLoad;
+  String? get sessionsErrorMessage => _sessionsErrorMessage;
+  String? get statisticsErrorMessage => _statisticsErrorMessage;
+  String? get errorMessage => _sessionsErrorMessage ?? _statisticsErrorMessage;
   Duration get currentElapsed => _currentElapsed;
 
   Future<void> init() async {
@@ -94,17 +113,54 @@ class SleepProvider extends ChangeNotifier {
   }
 
   Future<void> loadSessions({List<DreamModel>? dreams}) async {
+    final request = ++_loadRequest;
+    if (dreams != null) {
+      _statisticsDreams = List<DreamModel>.unmodifiable(dreams);
+    }
+    final dreamsForStatistics = _statisticsDreams;
+
     _isLoading = true;
+    _isLoadingSessions = true;
+    _isLoadingStatistics = true;
+    _sessionsErrorMessage = null;
+    _statisticsErrorMessage = null;
     notifyListeners();
 
     try {
-      _sessions = await _repository.getAllSessions();
-      _statistics = await _repository.getStatistics(dreams: dreams);
-      _isLoading = false;
-      notifyListeners();
+      final loadedSessions = await _repository.getAllSessions();
+      if (request != _loadRequest) return;
+      _sessions = loadedSessions;
+      _hasSuccessfulSessionsLoad = true;
     } catch (_) {
-      _isLoading = false;
-      notifyListeners();
+      if (request != _loadRequest) return;
+      _sessionsErrorMessage = 'Không thể tải danh sách phiên ngủ';
+    } finally {
+      if (request == _loadRequest) {
+        _isLoadingSessions = false;
+        _hasLoadedSessions = true;
+        _isLoading = _isLoadingStatistics;
+        notifyListeners();
+      }
+    }
+
+    if (request != _loadRequest) return;
+    try {
+      final loadedStatistics = await _repository.getStatistics(
+        dreams: dreamsForStatistics,
+      );
+      if (request != _loadRequest) return;
+      _statistics = loadedStatistics;
+      _hasSuccessfulStatisticsLoad = true;
+    } catch (_) {
+      if (request != _loadRequest) return;
+      _statisticsErrorMessage = 'Không thể tải thống kê giấc ngủ';
+    } finally {
+      if (request == _loadRequest) {
+        _isLoadingStatistics = false;
+        _hasLoadedStatistics = true;
+        _isLoading = _isLoadingSessions;
+        notifyListeners();
+      }
     }
   }
 
@@ -230,9 +286,22 @@ class SleepProvider extends ChangeNotifier {
         completed,
         ..._sessions.where((session) => session.id != completed.id),
       ];
+      _hasLoadedSessions = true;
+      _hasSuccessfulSessionsLoad = true;
+      _sessionsErrorMessage = null;
+      if (dreams != null) {
+        _statisticsDreams = List<DreamModel>.unmodifiable(dreams);
+      }
       try {
-        _statistics = await _repository.getStatistics(dreams: dreams);
+        _statistics = await _repository.getStatistics(
+          dreams: _statisticsDreams,
+        );
+        _hasLoadedStatistics = true;
+        _hasSuccessfulStatisticsLoad = true;
+        _statisticsErrorMessage = null;
       } catch (_) {
+        _hasLoadedStatistics = true;
+        _statisticsErrorMessage = 'Không thể tải thống kê giấc ngủ';
         // The completed session is already saved; a statistics refresh must not
         // turn a successful save into a failed stop operation.
       }

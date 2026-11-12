@@ -7,11 +7,11 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../models/sleep_session_model.dart';
-import '../../../models/sleep_statistics_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/dream_provider.dart';
 import '../../../providers/sleep_provider.dart';
 import '../../../shared/widgets/dream_card.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/sleep_quality_indicator.dart';
 
@@ -32,7 +32,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final sleepProvider = context.read<SleepProvider>();
       dreamProvider.loadDreams().then((_) {
         if (mounted) {
-          sleepProvider.loadSessions(dreams: dreamProvider.allDreams);
+          sleepProvider.loadSessions(
+            dreams: dreamProvider.hasSuccessfulLoad
+                ? dreamProvider.allDreams
+                : null,
+          );
         }
       });
     });
@@ -65,7 +69,9 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: AppColors.surface,
             onRefresh: () async {
               await dream.loadDreams();
-              await sleep.loadSessions(dreams: dream.allDreams);
+              await sleep.loadSessions(
+                dreams: dream.hasSuccessfulLoad ? dream.allDreams : null,
+              );
             },
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -91,7 +97,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           _buildSleepSummaryCard(
                             latestSession,
                             dream.allDreams.length,
-                            sleep.isLoading,
+                            sleep,
+                            dream,
                           ),
                           const SizedBox(height: 20),
                           _buildQuickActionButtons(context, sleep.isTracking),
@@ -105,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          _buildWeeklyBarChart(sleep.statistics),
+                          _buildWeeklyBarChart(sleep),
                           const SizedBox(height: 28),
                           SectionHeader(
                             title: 'Giấc mơ gần đây',
@@ -183,8 +190,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSleepSummaryCard(
     SleepSessionModel? latestSession,
     int dreamCount,
-    bool isLoading,
+    SleepProvider sleep,
+    DreamProvider dream,
   ) {
+    final isLoading = sleep.isLoadingSessions || !sleep.hasLoadedSessions;
     final hasSession = latestSession != null;
     final duration = hasSession
         ? '${(latestSession.totalMinutes / 60).toStringAsFixed(1)}h'
@@ -288,7 +297,18 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-          if (!hasSession && !isLoading) ...[
+          if (sleep.sessionsErrorMessage != null) ...[
+            const SizedBox(height: 14),
+            _InlineLoadError(
+              message: sleep.sessionsErrorMessage!,
+              key: const ValueKey('home-sessions-retry'),
+              onRetry: () => sleep.loadSessions(
+                dreams: dream.hasSuccessfulLoad ? dream.allDreams : null,
+              ),
+            ),
+          ] else if (!hasSession &&
+              !isLoading &&
+              sleep.sessionsErrorMessage == null) ...[
             const SizedBox(height: 16),
             Container(
               width: double.infinity,
@@ -401,120 +421,156 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildWeeklyBarChart(SleepStatisticsModel stats) {
+  Widget _buildWeeklyBarChart(SleepProvider sleep) {
+    if (sleep.isLoadingStatistics && !sleep.hasSuccessfulStatisticsLoad ||
+        !sleep.hasLoadedStatistics && sleep.statisticsErrorMessage == null) {
+      return const LoadingIndicator(message: 'Đang tải thống kê giấc ngủ...');
+    }
+    if (sleep.statisticsErrorMessage != null &&
+        !sleep.hasSuccessfulStatisticsLoad) {
+      return _InlineLoadError(
+        message: sleep.statisticsErrorMessage!,
+        key: const ValueKey('home-statistics-retry'),
+        onRetry: sleep.loadSessions,
+      );
+    }
+    final stats = sleep.statistics;
     final weekly = stats.weeklyStats;
     if (weekly.isEmpty) {
-      return _EmptyPanel(
-        icon: Icons.bar_chart_rounded,
-        message: 'Chưa có dữ liệu giấc ngủ trong tuần này.',
+      return Column(
+        children: [
+          if (sleep.statisticsErrorMessage != null)
+            _InlineLoadError(
+              message: sleep.statisticsErrorMessage!,
+              key: const ValueKey('home-statistics-retry'),
+              onRetry: sleep.loadSessions,
+            ),
+          const SizedBox(height: 8),
+          _EmptyPanel(
+            icon: Icons.bar_chart_rounded,
+            message: 'Chưa có dữ liệu giấc ngủ trong tuần này.',
+          ),
+        ],
       );
     }
 
-    return Container(
-      height: 224,
-      padding: const EdgeInsets.fromLTRB(12, 18, 16, 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.divider),
-      ),
-      child: BarChart(
-        BarChartData(
-          alignment: BarChartAlignment.spaceAround,
-          maxY: 12,
-          minY: 0,
-          barTouchData: BarTouchData(
-            touchTooltipData: BarTouchTooltipData(
-              getTooltipItem: (group, groupIndex, rod, rodIndex) =>
-                  BarTooltipItem(
-                    '${rod.toY.toStringAsFixed(1)} giờ',
-                    const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-            ),
+    return Column(
+      children: [
+        if (sleep.statisticsErrorMessage != null) ...[
+          _InlineLoadError(
+            message: sleep.statisticsErrorMessage!,
+            key: const ValueKey('home-statistics-retry'),
+            onRetry: sleep.loadSessions,
           ),
-          titlesData: FlTitlesData(
-            show: true,
-            topTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            rightTitles: const AxisTitles(
-              sideTitles: SideTitles(showTitles: false),
-            ),
-            leftTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 27,
-                interval: 4,
-                getTitlesWidget: (value, meta) => Text(
-                  '${value.toInt()}h',
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 10,
-                  ),
+          const SizedBox(height: 8),
+        ],
+        Container(
+          height: 224,
+          padding: const EdgeInsets.fromLTRB(12, 18, 16, 10),
+          decoration: BoxDecoration(
+            color: AppColors.surface.withOpacity(0.92),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: BarChart(
+            BarChartData(
+              alignment: BarChartAlignment.spaceAround,
+              maxY: 12,
+              minY: 0,
+              barTouchData: BarTouchData(
+                touchTooltipData: BarTouchTooltipData(
+                  getTooltipItem: (group, groupIndex, rod, rodIndex) =>
+                      BarTooltipItem(
+                        '${rod.toY.toStringAsFixed(1)} giờ',
+                        const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
                 ),
               ),
-            ),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                reservedSize: 28,
-                getTitlesWidget: (value, meta) {
-                  final index = value.toInt();
-                  if (index < 0 || index >= weekly.length)
-                    return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 7),
-                    child: Text(
-                      weekly[index].dayLabel,
+              titlesData: FlTitlesData(
+                show: true,
+                topTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                rightTitles: const AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 27,
+                    interval: 4,
+                    getTitlesWidget: (value, meta) => Text(
+                      '${value.toInt()}h',
                       style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
+                        color: AppColors.textMuted,
                         fontSize: 10,
                       ),
                     ),
-                  );
-                },
-              ),
-            ),
-          ),
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            horizontalInterval: 4,
-            getDrawingHorizontalLine: (value) =>
-                const FlLine(color: AppColors.divider, strokeWidth: 1),
-          ),
-          borderData: FlBorderData(show: false),
-          barGroups: List.generate(weekly.length, (index) {
-            final stat = weekly[index];
-            final reachedGoal = stat.hours >= 7;
-            return BarChartGroupData(
-              x: index,
-              barRods: [
-                BarChartRodData(
-                  toY: stat.hours.clamp(0, 12).toDouble(),
-                  gradient: reachedGoal
-                      ? AppColors.primaryGradient
-                      : AppColors.sleepGradient,
-                  width: weekly.length > 5 ? 14 : 20,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(6),
-                  ),
-                  backDrawRodData: BackgroundBarChartRodData(
-                    show: true,
-                    toY: 12,
-                    color: AppColors.surfaceLight.withOpacity(0.42),
                   ),
                 ),
-              ],
-            );
-          }),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 28,
+                    getTitlesWidget: (value, meta) {
+                      final index = value.toInt();
+                      if (index < 0 || index >= weekly.length)
+                        return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 7),
+                        child: Text(
+                          weekly[index].dayLabel,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 10,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              gridData: FlGridData(
+                show: true,
+                drawVerticalLine: false,
+                horizontalInterval: 4,
+                getDrawingHorizontalLine: (value) =>
+                    const FlLine(color: AppColors.divider, strokeWidth: 1),
+              ),
+              borderData: FlBorderData(show: false),
+              barGroups: List.generate(weekly.length, (index) {
+                final stat = weekly[index];
+                final reachedGoal = stat.hours >= 7;
+                return BarChartGroupData(
+                  x: index,
+                  barRods: [
+                    BarChartRodData(
+                      toY: stat.hours.clamp(0, 12).toDouble(),
+                      gradient: reachedGoal
+                          ? AppColors.primaryGradient
+                          : AppColors.sleepGradient,
+                      width: weekly.length > 5 ? 14 : 20,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(6),
+                      ),
+                      backDrawRodData: BackgroundBarChartRodData(
+                        show: true,
+                        toY: 12,
+                        color: AppColors.surfaceLight.withOpacity(0.42),
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -525,7 +581,17 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    if (dream.allDreams.isEmpty) {
+    if (dream.errorMessage != null && !dream.hasSuccessfulLoad) {
+      return _InlineLoadError(
+        message: dream.errorMessage!,
+        key: const ValueKey('home-dreams-retry'),
+        onRetry: dream.loadDreams,
+      );
+    }
+    if (dream.allDreams.isEmpty && !dream.hasLoaded) {
+      return const LoadingIndicator(message: 'Đang tải giấc mơ...');
+    }
+    if (dream.allDreams.isEmpty && dream.errorMessage == null) {
       return _EmptyPanel(
         icon: Icons.auto_awesome_outlined,
         message: 'Chưa có giấc mơ nào. Hãy ghi lại giấc mơ đầu tiên nhé!',
@@ -538,14 +604,55 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Column(
-      children: dream.allDreams.take(3).map((entry) {
-        return DreamCard(
-          dream: entry,
-          onTap: () => context.push('${AppRoutes.dreamDetail}/${entry.id}'),
-        );
-      }).toList(),
+      children: [
+        if (dream.errorMessage != null)
+          _InlineLoadError(
+            message: dream.errorMessage!,
+            key: const ValueKey('home-dreams-retry'),
+            onRetry: dream.loadDreams,
+          ),
+        ...dream.allDreams
+            .take(3)
+            .map(
+              (entry) => DreamCard(
+                dream: entry,
+                onTap: () =>
+                    context.push('${AppRoutes.dreamDetail}/${entry.id}'),
+              ),
+            ),
+      ],
     );
   }
+}
+
+class _InlineLoadError extends StatelessWidget {
+  const _InlineLoadError({
+    super.key,
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppColors.error.withOpacity(.12),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.error.withOpacity(.3)),
+    ),
+    child: Row(
+      children: [
+        const Icon(Icons.cloud_off_rounded, color: AppColors.error),
+        const SizedBox(width: 10),
+        Expanded(child: Text(message)),
+        TextButton(onPressed: onRetry, child: const Text('Thử lại')),
+      ],
+    ),
+  );
 }
 
 class _QuickActionCard extends StatelessWidget {

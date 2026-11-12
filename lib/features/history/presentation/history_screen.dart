@@ -5,10 +5,13 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../models/dream_model.dart';
+import '../../../models/sleep_session_model.dart';
 import '../../../providers/dream_provider.dart';
 import '../../../providers/sleep_provider.dart';
 import '../../../shared/widgets/dream_card.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 import '../../../shared/widgets/sleep_quality_indicator.dart';
 
 enum HistoryFilter { all, week, month }
@@ -29,6 +32,19 @@ class _HistoryScreenState extends State<HistoryScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final dreams = context.read<DreamProvider>();
+      final sleep = context.read<SleepProvider>();
+      if (!dreams.isLoading && !dreams.hasLoaded) {
+        dreams.loadDreams();
+      }
+      if (!sleep.isLoading && !sleep.hasLoadedSessions) {
+        sleep.loadSessions(
+          dreams: dreams.hasSuccessfulLoad ? dreams.allDreams : null,
+        );
+      }
+    });
   }
 
   @override
@@ -103,115 +119,8 @@ class _HistoryScreenState extends State<HistoryScreen>
                 child: TabBarView(
                   controller: _tabController,
                   children: [
-                    // Tab 1: Lịch sử Giấc mơ
-                    filteredDreams.isEmpty
-                        ? const EmptyState(
-                            icon: Icons.history_rounded,
-                            title: 'Không có giấc mơ trong khoảng này',
-                            message: 'Hãy chọn mốc thời gian khác để xem thêm',
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 8,
-                            ),
-                            itemCount: filteredDreams.length,
-                            itemBuilder: (context, index) {
-                              final dream = filteredDreams[index];
-                              return DreamCard(
-                                dream: dream,
-                                onTap: () => context.push(
-                                  '${AppRoutes.dreamDetail}/${dream.id}',
-                                ),
-                              );
-                            },
-                          ),
-
-                    // Tab 2: Lịch sử Phiên ngủ
-                    filteredSessions.isEmpty
-                        ? const EmptyState(
-                            icon: Icons.nights_stay_outlined,
-                            title: 'Không có phiên ngủ trong khoảng này',
-                            message: 'Hãy kích hoạt theo dõi ngủ mỗi đêm để ghi lại nhật ký',
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 8,
-                            ),
-                            itemCount: filteredSessions.length,
-                            itemBuilder: (context, index) {
-                              final session = filteredSessions[index];
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surface,
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(color: AppColors.divider),
-                                ),
-                                child: Row(
-                                  children: [
-                                    SleepQualityIndicator(
-                                      score: session.qualityScore,
-                                      size: 54,
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            DateFormatter.formatDate(
-                                              session.startTime,
-                                            ),
-                                            style: const TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.bold,
-                                              color: AppColors.textPrimary,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '${DateFormatter.formatTime(session.startTime)} - ${session.endTime != null ? DateFormatter.formatTime(session.endTime!) : "Chưa kết thúc"}',
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              color: AppColors.textSecondary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          DateFormatter.formatDurationMinutes(
-                                            session.totalMinutes,
-                                          ),
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppColors.primaryLight,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Sâu: ${session.deepSleepMinutes}m',
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: AppColors.textMuted,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
+                    _buildDreamTab(dreamProvider, filteredDreams),
+                    _buildSleepTab(sleepProvider, filteredSessions),
                   ],
                 ),
               ),
@@ -241,6 +150,185 @@ class _HistoryScreenState extends State<HistoryScreen>
         fontSize: 12,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         color: isSelected ? AppColors.primaryLight : AppColors.textSecondary,
+      ),
+    );
+  }
+
+  Widget _buildDreamTab(
+    DreamProvider provider,
+    List<DreamModel> filteredDreams,
+  ) {
+    return _buildSourceTab(
+      isLoading: provider.isLoading,
+      hasLoaded: provider.hasLoaded,
+      hasSuccessfulLoad: provider.hasSuccessfulLoad,
+      errorMessage: provider.errorMessage,
+      hasData: filteredDreams.isNotEmpty,
+      onRetry: provider.loadDreams,
+      emptyState: const EmptyState(
+        icon: Icons.history_rounded,
+        title: 'Không có giấc mơ trong khoảng này',
+        message: 'Hãy chọn mốc thời gian khác để xem thêm',
+      ),
+      content: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        itemCount: filteredDreams.length,
+        itemBuilder: (context, index) {
+          final dream = filteredDreams[index];
+          return DreamCard(
+            dream: dream,
+            onTap: () => context.push('${AppRoutes.dreamDetail}/${dream.id}'),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSleepTab(
+    SleepProvider provider,
+    List<SleepSessionModel> filteredSessions,
+  ) {
+    return _buildSourceTab(
+      isLoading: provider.isLoadingSessions,
+      hasLoaded: provider.hasLoadedSessions,
+      hasSuccessfulLoad: provider.hasSuccessfulSessionsLoad,
+      errorMessage: provider.sessionsErrorMessage,
+      hasData: filteredSessions.isNotEmpty,
+      onRetry: () => provider.loadSessions(),
+      emptyState: const EmptyState(
+        icon: Icons.nights_stay_outlined,
+        title: 'Không có phiên ngủ trong khoảng này',
+        message: 'Hãy kích hoạt theo dõi ngủ mỗi đêm để ghi lại nhật ký',
+      ),
+      content: ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        itemCount: filteredSessions.length,
+        itemBuilder: (context, index) {
+          final session = filteredSessions[index];
+          return _buildSleepSessionCard(session);
+        },
+      ),
+    );
+  }
+
+  Widget _buildSleepSessionCard(SleepSessionModel session) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        children: [
+          SleepQualityIndicator(score: session.qualityScore, size: 54),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  DateFormatter.formatDate(session.startTime),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${DateFormatter.formatTime(session.startTime)} - ${session.endTime != null ? DateFormatter.formatTime(session.endTime!) : "Chưa kết thúc"}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                DateFormatter.formatDurationMinutes(session.totalMinutes),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primaryLight,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Sâu: ${session.deepSleepMinutes}m',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSourceTab({
+    required bool isLoading,
+    required bool hasLoaded,
+    required bool hasSuccessfulLoad,
+    required String? errorMessage,
+    required bool hasData,
+    required Future<void> Function() onRetry,
+    required Widget emptyState,
+    required Widget content,
+  }) {
+    if (errorMessage != null && !hasData) {
+      return EmptyState(
+        icon: Icons.cloud_off_rounded,
+        title: 'Chưa tải được dữ liệu',
+        message: errorMessage,
+        actionLabel: 'Thử tải lại',
+        onAction: onRetry,
+      );
+    }
+    if ((!hasLoaded && !hasSuccessfulLoad) ||
+        (isLoading && !hasSuccessfulLoad)) {
+      return const LoadingIndicator(message: 'Đang tải dữ liệu...');
+    }
+    if (errorMessage == null && !hasData) return emptyState;
+
+    return Column(
+      children: [
+        if (isLoading) const LinearProgressIndicator(minHeight: 2),
+        if (errorMessage != null) _buildInlineError(errorMessage, onRetry),
+        Expanded(child: hasData ? content : emptyState),
+      ],
+    );
+  }
+
+  Widget _buildInlineError(String message, Future<void> Function() onRetry) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      child: Material(
+        color: AppColors.error.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.cloud_off_rounded, color: AppColors.error),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                ),
+              ),
+              TextButton(onPressed: onRetry, child: const Text('Thử lại')),
+            ],
+          ),
+        ),
       ),
     );
   }
