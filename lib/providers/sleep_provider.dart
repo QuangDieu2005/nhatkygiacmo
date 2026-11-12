@@ -128,6 +128,10 @@ class SleepProvider extends ChangeNotifier {
         try {
           await _trackingService.clearActiveSession();
         } catch (_) {
+          // The user may have dismissed the completed view earlier. Restore it
+          // before reporting cleanup failure so the saved session stays visible.
+          _lastCompletedSession = pending;
+          notifyListeners();
           throw const SleepTrackingStartException(
             'Phiên trước đã lưu nhưng chưa thể dọn trạng thái cũ. Hãy thử lại.',
           );
