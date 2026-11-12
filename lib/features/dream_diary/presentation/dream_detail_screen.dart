@@ -7,258 +7,538 @@ import '../../../core/utils/date_formatter.dart';
 import '../../../models/dream_model.dart';
 import '../../../providers/dream_provider.dart';
 
-class DreamDetailScreen extends StatelessWidget {
+class DreamDetailScreen extends StatefulWidget {
   final String dreamId;
 
   const DreamDetailScreen({super.key, required this.dreamId});
 
-  Future<void> _handleDelete(BuildContext context, DreamProvider provider) async {
+  @override
+  State<DreamDetailScreen> createState() => _DreamDetailScreenState();
+}
+
+class _DreamDetailScreenState extends State<DreamDetailScreen> {
+  bool _isDeleting = false;
+
+  Future<void> _confirmDelete(DreamProvider provider) async {
+    if (_isDeleting) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text('Xác nhận xóa', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text(
-          'Bạn có chắc chắn muốn xóa giấc mơ này không? Hành động này không thể hoàn tác.',
-          style: TextStyle(color: AppColors.textSecondary),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: AppColors.divider),
         ),
+        icon: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.error.withOpacity(0.12),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+        ),
+        title: const Text('Xóa giấc mơ này?'),
+        content: const Text(
+          'Bản ghi sẽ bị xóa khỏi nhật ký. Bạn không thể hoàn tác thao tác này.',
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Hủy', style: TextStyle(color: AppColors.textSecondary)),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Giữ lại'),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-            child: const Text('Xóa'),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.delete_rounded, size: 18),
+            label: const Text('Xóa giấc mơ'),
           ),
         ],
       ),
     );
 
-    if (confirmed == true && context.mounted) {
-      await provider.deleteDream(dreamId);
-      if (context.mounted) {
+    if (confirmed != true || !mounted) return;
+    setState(() => _isDeleting = true);
+
+    try {
+      final deleted = await provider.deleteDream(widget.dreamId);
+      if (!mounted) return;
+      setState(() => _isDeleting = false);
+
+      if (deleted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Đã xóa giấc mơ'),
-            backgroundColor: AppColors.error,
+            content: Text('Đã xóa giấc mơ khỏi nhật ký.'),
+            backgroundColor: AppColors.success,
           ),
         );
         context.pop();
+      } else {
+        _showDeleteError();
       }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isDeleting = false);
+      _showDeleteError();
     }
+  }
+
+  void _showDeleteError() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Chưa thể xóa giấc mơ. Vui lòng thử lại.'),
+        backgroundColor: AppColors.error,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final dreamProvider = context.watch<DreamProvider>();
-    final dream = dreamProvider.getDreamById(dreamId);
+    final provider = context.watch<DreamProvider>();
+    final dream = provider.getDreamById(widget.dreamId);
 
-    if (dream == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Chi tiết giấc mơ')),
-        body: const Center(
-          child: Text('Không tìm thấy giấc mơ này', style: TextStyle(color: AppColors.textSecondary)),
-        ),
-      );
-    }
-
-    final emotionColor = dream.emotion.color;
+    if (dream == null) return _buildNotFound();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chi tiết giấc mơ'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: () => context.push('${AppRoutes.editDream}/$dreamId'),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: AppColors.error),
-            onPressed: () => _handleDelete(context, dreamProvider),
-          ),
-        ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.nightSkyGradient,
-        ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header Cảm xúc & Ngày tháng
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: emotionColor.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: emotionColor.withOpacity(0.18),
-                          shape: BoxShape.circle,
+          bottom: false,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final horizontalPadding = constraints.maxWidth < 360 ? 16.0 : 22.0;
+              return SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 28),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 680),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildDreamHeader(dream),
+                        const SizedBox(height: 16),
+                        _buildEmotionCard(dream),
+                        const SizedBox(height: 16),
+                        _buildInsightCards(dream),
+                        const SizedBox(height: 24),
+                        _buildSectionHeading(
+                          icon: Icons.notes_rounded,
+                          title: 'Câu chuyện giấc mơ',
                         ),
-                        child: Text(dream.emotion.emoji, style: const TextStyle(fontSize: 28)),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              dream.emotion.label,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: emotionColor,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              DateFormatter.formatDateTime(dream.dreamDate),
-                              style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (dream.isLucid)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.primaryLight),
+                        const SizedBox(height: 10),
+                        _buildDreamContent(dream),
+                        if (dream.tags.isNotEmpty) ...[
+                          const SizedBox(height: 24),
+                          _buildSectionHeading(
+                            icon: Icons.sell_outlined,
+                            title: 'Thẻ phân loại',
                           ),
-                          child: const Row(
-                            children: [
-                              Icon(Icons.auto_awesome, color: AppColors.starGold, size: 14),
-                              SizedBox(width: 4),
-                              Text(
-                                'Lucid',
-                                style: TextStyle(
-                                  color: AppColors.primaryLight,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Tiêu đề giấc mơ
-                Text(
-                  dream.title,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Độ rõ nét
-                Row(
-                  children: [
-                    const Text('Độ rõ nét: ', style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
-                    Row(
-                      children: List.generate(5, (index) {
-                        return Icon(
-                          index < dream.clarityScore ? Icons.star_rounded : Icons.star_border_rounded,
-                          color: AppColors.starGold,
-                          size: 20,
-                        );
-                      }),
+                          const SizedBox(height: 10),
+                          _buildTags(dream, constraints.maxWidth - horizontalPadding * 2),
+                        ],
+                        const SizedBox(height: 20),
+                        _buildCreatedAt(dream),
+                      ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Đường kẻ chia cắt
-                const Divider(),
-                const SizedBox(height: 20),
-
-                // Nội dung câu chuyện giấc mơ
-                const Text(
-                  'Nội dung giấc mơ',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 12),
+              );
+            },
+          ),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          decoration: BoxDecoration(
+            color: AppColors.background.withOpacity(0.96),
+            border: const Border(top: BorderSide(color: AppColors.divider)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isDeleting
+                      ? null
+                      : () => context.push('${AppRoutes.editDream}/${dream.id}'),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Chỉnh sửa', maxLines: 1, overflow: TextOverflow.ellipsis),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                    foregroundColor: AppColors.primaryLight,
+                    side: BorderSide(color: AppColors.primary.withOpacity(0.55)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _isDeleting ? null : () => _confirmDelete(provider),
+                  icon: _isDeleting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.delete_outline_rounded, size: 18),
+                  label: Text(_isDeleting ? 'Đang xóa' : 'Xóa'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                    foregroundColor: AppColors.error,
+                    side: BorderSide(color: AppColors.error.withOpacity(0.5)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotFound() {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Chi tiết giấc mơ')),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 Container(
-                  width: double.infinity,
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: AppColors.divider),
                   ),
-                  child: Text(
-                    dream.content,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      color: AppColors.textPrimary,
-                      height: 1.7,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
+                  child: const Icon(Icons.auto_stories_outlined,
+                      color: AppColors.primaryLight, size: 30),
                 ),
-
-                // Tags nếu có
-                if (dream.tags.isNotEmpty) ...[
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Thẻ phân loại',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: dream.tags.map((tag) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceLight,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.divider),
-                        ),
-                        child: Text(
-                          '#$tag',
-                          style: const TextStyle(
-                            color: AppColors.primaryLight,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-                const SizedBox(height: 40),
+                const SizedBox(height: 16),
+                Text('Không tìm thấy giấc mơ này',
+                    style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 7),
+                Text(
+                  'Bản ghi có thể đã được xóa khỏi nhật ký.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: const Text('Quay lại'),
+                ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDreamHeader(DreamModel dream) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: AppColors.cardGradient,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.primary.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withOpacity(0.12),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: 0,
+            top: 0,
+            child: Icon(Icons.nightlight_round,
+                size: 25, color: AppColors.starGold.withOpacity(0.75)),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.auto_awesome_rounded,
+                      color: AppColors.primaryLight, size: 16),
+                  const SizedBox(width: 7),
+                  Text(
+                    'NHẬT KÝ GIẤC MƠ',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: AppColors.primaryLight,
+                          letterSpacing: 1.1,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 13),
+              Padding(
+                padding: const EdgeInsets.only(right: 20),
+                child: Text(
+                  dream.title,
+                  softWrap: true,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        fontSize: 25,
+                        height: 1.25,
+                      ),
+                ),
+              ),
+              const SizedBox(height: 17),
+              Row(
+                children: [
+                  const Icon(Icons.calendar_today_rounded,
+                      size: 14, color: AppColors.textMuted),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      DateFormatter.formatDate(dream.dreamDate),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmotionCard(DreamModel dream) {
+    final color = dream.emotion.color;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.28)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.13),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Text(dream.emotion.emoji, style: const TextStyle(fontSize: 24)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Cảm xúc khi thức dậy', style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: 3),
+                Text(
+                  dream.emotion.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(color: color),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInsightCards(DreamModel dream) {
+    return Row(
+      children: [
+        Expanded(
+          child: _InsightCard(
+            icon: Icons.visibility_rounded,
+            label: 'Độ rõ nét',
+            value: '${dream.clarityScore} / 5',
+            accent: AppColors.starGold,
+            detail: Row(
+              children: List.generate(5, (index) {
+                return Icon(
+                  index < dream.clarityScore ? Icons.star_rounded : Icons.star_border_rounded,
+                  color: AppColors.starGold,
+                  size: 15,
+                );
+              }),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _InsightCard(
+            icon: Icons.auto_awesome_rounded,
+            label: 'Lucid dream',
+            value: dream.isLucid ? 'Có' : 'Không',
+            accent: dream.isLucid ? AppColors.primaryLight : AppColors.textSecondary,
+            detail: Text(
+              dream.isLucid ? 'Biết mình đang mơ' : 'Giấc mơ thông thường',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 10),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeading({required IconData icon, required String title}) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.primaryLight),
+        const SizedBox(width: 8),
+        Text(title, style: Theme.of(context).textTheme.titleMedium),
+      ],
+    );
+  }
+
+  Widget _buildDreamContent(DreamModel dream) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: SelectionArea(
+        child: Text(
+          dream.content,
+          softWrap: true,
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                height: 1.7,
+                letterSpacing: 0.1,
+              ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTags(DreamModel dream, double availableWidth) {
+    final maxChipWidth = (availableWidth - 16).clamp(120.0, 360.0).toDouble();
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: dream.tags.map((tag) {
+        return Container(
+          constraints: BoxConstraints(maxWidth: maxChipWidth),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceLight,
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.tag_rounded, size: 14, color: AppColors.primaryLight),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  tag,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.primaryLight,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildCreatedAt(DreamModel dream) {
+    return Row(
+      children: [
+        const Icon(Icons.schedule_rounded, size: 14, color: AppColors.textMuted),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            'Được ghi lại ${DateFormatter.formatDateTime(dream.createdAt)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InsightCard extends StatelessWidget {
+  const _InsightCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.accent,
+    required this.detail,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color accent;
+  final Widget detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 124),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        gradient: AppColors.cardGradient,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: accent, size: 18),
+          const SizedBox(height: 8),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(color: accent),
+          ),
+          const SizedBox(height: 4),
+          detail,
+        ],
       ),
     );
   }

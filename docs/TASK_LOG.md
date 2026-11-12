@@ -63,3 +63,12 @@
 - File tạo/sửa: `lib/features/dream_diary/presentation/dream_form_widgets.dart`, `lib/features/dream_diary/presentation/add_dream_screen.dart`, `lib/features/dream_diary/presentation/edit_dream_screen.dart`, `docs/TASK_LOG.md`.
 - `dart format` và `flutter analyze --no-pub` mỗi lệnh không phản hồi sau 30 giây; đã dừng, chưa có kết quả pass/fail. Không chạy ứng dụng do CLI không phản hồi. `git diff --check` được chạy sau đó.
 - Không thêm package, không thay model/provider/repository, không kết nối Supabase; không sửa backend, SQL schema hoặc database.
+
+## 2026-11-12 — Đợt 4: thiết kế lại màn hình chi tiết giấc mơ
+
+- Rà soát prompt Đợt 4, tài liệu kiến trúc/hướng dẫn/log và detail/list/add/edit screens, form widgets, model, Provider, AppColors/AppTheme, routes.
+- Thiết kế lại `dream_detail_screen.dart` theo Night Sky: hero title/date, card cảm xúc, clarity/lucid insight cards, nội dung đầy đủ có thể chọn, tags có giới hạn bề rộng và thời điểm tạo; bố cục cuộn, giới hạn max width cho màn rộng, trạng thái không tìm thấy.
+- Bổ sung action bar sửa/xóa; giữ route edit. Hộp xác nhận xóa theo theme; khóa thao tác trong khi xóa, kiểm tra kết quả `deleteDream`, mounted checks, chỉ pop và báo thành công khi xóa thành công; báo lỗi và giữ màn hình khi thất bại.
+- File sửa: `lib/features/dream_diary/presentation/dream_detail_screen.dart`, `docs/TASK_LOG.md`.
+- `dart format lib/features/dream_diary/presentation/dream_detail_screen.dart` và `flutter analyze --no-pub` đều không phản hồi sau 30 giây; đã dừng, chưa có kết quả pass/fail. Không chạy ứng dụng; runtime layout chưa được xác minh.
+- `git diff --check` được chạy sau khi ghi log. Không sửa model/provider/repository/routes, backend, Supabase, SQL schema hay database.
