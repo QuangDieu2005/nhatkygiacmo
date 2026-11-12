@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../models/dream_model.dart';
 import '../../../providers/dream_provider.dart';
+import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 
 class DreamDetailScreen extends StatefulWidget {
   final String dreamId;
@@ -18,6 +21,28 @@ class DreamDetailScreen extends StatefulWidget {
 
 class _DreamDetailScreenState extends State<DreamDetailScreen> {
   bool _isDeleting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _requestDream(widget.dreamId);
+  }
+
+  @override
+  void didUpdateWidget(covariant DreamDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.dreamId != widget.dreamId) {
+      _isDeleting = false;
+      _requestDream(widget.dreamId);
+    }
+  }
+
+  void _requestDream(String id, {bool retry = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.dreamId != id) return;
+      context.read<DreamProvider>().loadDreamById(id, retry: retry);
+    });
+  }
 
   Future<void> _confirmDelete(DreamProvider provider) async {
     if (_isDeleting) return;
@@ -36,7 +61,10 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
             color: AppColors.error.withOpacity(0.12),
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
+          child: const Icon(
+            Icons.delete_outline_rounded,
+            color: AppColors.error,
+          ),
         ),
         title: const Text('Xóa giấc mơ này?'),
         content: const Text(
@@ -102,21 +130,36 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
     final provider = context.watch<DreamProvider>();
     final dream = provider.getDreamById(widget.dreamId);
 
-    if (dream == null) return _buildNotFound();
+    if (dream == null) {
+      return switch (provider.dreamRecordLoadStatus(widget.dreamId)) {
+        DreamRecordLoadStatus.error => _buildLoadError(
+          provider.dreamRecordError(widget.dreamId) ??
+              'Chưa thể tải giấc mơ này.',
+        ),
+        DreamRecordLoadStatus.loaded => _buildNotFound(),
+        DreamRecordLoadStatus.idle ||
+        DreamRecordLoadStatus.loading => _buildLoading(),
+      };
+    }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Chi tiết giấc mơ'),
-      ),
+      appBar: AppBar(title: const Text('Chi tiết giấc mơ')),
       body: DecoratedBox(
         decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
         child: SafeArea(
           bottom: false,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final horizontalPadding = constraints.maxWidth < 360 ? 16.0 : 22.0;
+              final horizontalPadding = constraints.maxWidth < 360
+                  ? 16.0
+                  : 22.0;
               return SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 28),
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  12,
+                  horizontalPadding,
+                  28,
+                ),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 680),
@@ -142,7 +185,10 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
                             title: 'Thẻ phân loại',
                           ),
                           const SizedBox(height: 10),
-                          _buildTags(dream, constraints.maxWidth - horizontalPadding * 2),
+                          _buildTags(
+                            dream,
+                            constraints.maxWidth - horizontalPadding * 2,
+                          ),
                         ],
                         const SizedBox(height: 20),
                         _buildCreatedAt(dream),
@@ -169,21 +215,32 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _isDeleting
                       ? null
-                      : () => context.push('${AppRoutes.editDream}/${dream.id}'),
+                      : () =>
+                            context.push('${AppRoutes.editDream}/${dream.id}'),
                   icon: const Icon(Icons.edit_outlined, size: 18),
-                  label: const Text('Chỉnh sửa', maxLines: 1, overflow: TextOverflow.ellipsis),
+                  label: const Text(
+                    'Chỉnh sửa',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(48, 48),
                     foregroundColor: AppColors.primaryLight,
-                    side: BorderSide(color: AppColors.primary.withOpacity(0.55)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    side: BorderSide(
+                      color: AppColors.primary.withOpacity(0.55),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: _isDeleting ? null : () => _confirmDelete(provider),
+                  onPressed: _isDeleting
+                      ? null
+                      : () => _confirmDelete(provider),
                   icon: _isDeleting
                       ? const SizedBox(
                           width: 16,
@@ -196,7 +253,9 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
                     minimumSize: const Size(48, 48),
                     foregroundColor: AppColors.error,
                     side: BorderSide(color: AppColors.error.withOpacity(0.5)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                 ),
               ),
@@ -206,6 +265,30 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
       ),
     );
   }
+
+  Widget _buildLoading() => Scaffold(
+    appBar: AppBar(title: const Text('Chi tiết giấc mơ')),
+    body: const DecoratedBox(
+      decoration: BoxDecoration(gradient: AppColors.nightSkyGradient),
+      child: Center(child: LoadingIndicator(message: 'Đang tải giấc mơ...')),
+    ),
+  );
+
+  Widget _buildLoadError(String message) => Scaffold(
+    appBar: AppBar(title: const Text('Chi tiết giấc mơ')),
+    body: DecoratedBox(
+      decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
+      child: Center(
+        child: EmptyState(
+          icon: Icons.cloud_off_rounded,
+          title: 'Chưa tải được giấc mơ',
+          message: message,
+          actionLabel: 'Thử lại',
+          onAction: () => _requestDream(widget.dreamId, retry: true),
+        ),
+      ),
+    ),
+  );
 
   Widget _buildNotFound() {
     return Scaffold(
@@ -225,12 +308,17 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: AppColors.divider),
                   ),
-                  child: const Icon(Icons.auto_stories_outlined,
-                      color: AppColors.primaryLight, size: 30),
+                  child: const Icon(
+                    Icons.auto_stories_outlined,
+                    color: AppColors.primaryLight,
+                    size: 30,
+                  ),
                 ),
                 const SizedBox(height: 16),
-                Text('Không tìm thấy giấc mơ này',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Không tìm thấy giấc mơ này',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 7),
                 Text(
                   'Bản ghi có thể đã được xóa khỏi nhật ký.',
@@ -272,24 +360,30 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
           Positioned(
             right: 0,
             top: 0,
-            child: Icon(Icons.nightlight_round,
-                size: 25, color: AppColors.starGold.withOpacity(0.75)),
+            child: Icon(
+              Icons.nightlight_round,
+              size: 25,
+              color: AppColors.starGold.withOpacity(0.75),
+            ),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.auto_awesome_rounded,
-                      color: AppColors.primaryLight, size: 16),
+                  const Icon(
+                    Icons.auto_awesome_rounded,
+                    color: AppColors.primaryLight,
+                    size: 16,
+                  ),
                   const SizedBox(width: 7),
                   Text(
                     'NHẬT KÝ GIẤC MƠ',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AppColors.primaryLight,
-                          letterSpacing: 1.1,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      color: AppColors.primaryLight,
+                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -299,26 +393,26 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
                 child: Text(
                   dream.title,
                   softWrap: true,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontSize: 25,
-                        height: 1.25,
-                      ),
+                  style: Theme.of(context).textTheme.headlineMedium
+                      ?.copyWith(fontSize: 25, height: 1.25),
                 ),
               ),
               const SizedBox(height: 17),
               Row(
                 children: [
-                  const Icon(Icons.calendar_today_rounded,
-                      size: 14, color: AppColors.textMuted),
+                  const Icon(
+                    Icons.calendar_today_rounded,
+                    size: 14,
+                    color: AppColors.textMuted,
+                  ),
                   const SizedBox(width: 7),
                   Expanded(
                     child: Text(
                       DateFormatter.formatDate(dream.dreamDate),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: AppColors.textSecondary),
                     ),
                   ),
                 ],
@@ -350,20 +444,27 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
               color: color.withOpacity(0.13),
               borderRadius: BorderRadius.circular(15),
             ),
-            child: Text(dream.emotion.emoji, style: const TextStyle(fontSize: 24)),
+            child: Text(
+              dream.emotion.emoji,
+              style: const TextStyle(fontSize: 24),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Cảm xúc khi thức dậy', style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  'Cảm xúc khi thức dậy',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 const SizedBox(height: 3),
                 Text(
                   dream.emotion.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(color: color),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(color: color),
                 ),
               ],
             ),
@@ -385,7 +486,9 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
             detail: Row(
               children: List.generate(5, (index) {
                 return Icon(
-                  index < dream.clarityScore ? Icons.star_rounded : Icons.star_border_rounded,
+                  index < dream.clarityScore
+                      ? Icons.star_rounded
+                      : Icons.star_border_rounded,
                   color: AppColors.starGold,
                   size: 15,
                 );
@@ -399,12 +502,15 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
             icon: Icons.auto_awesome_rounded,
             label: 'Lucid dream',
             value: dream.isLucid ? 'Có' : 'Không',
-            accent: dream.isLucid ? AppColors.primaryLight : AppColors.textSecondary,
+            accent: dream.isLucid
+                ? AppColors.primaryLight
+                : AppColors.textSecondary,
             detail: Text(
               dream.isLucid ? 'Biết mình đang mơ' : 'Giấc mơ thông thường',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 10),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(fontSize: 10),
             ),
           ),
         ),
@@ -435,10 +541,8 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
         child: Text(
           dream.content,
           softWrap: true,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                height: 1.7,
-                letterSpacing: 0.1,
-              ),
+          style: Theme.of(context).textTheme.bodyLarge
+              ?.copyWith(height: 1.7, letterSpacing: 0.1),
         ),
       ),
     );
@@ -461,16 +565,19 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.tag_rounded, size: 14, color: AppColors.primaryLight),
+              const Icon(
+                Icons.tag_rounded,
+                size: 14,
+                color: AppColors.primaryLight,
+              ),
               const SizedBox(width: 5),
               Flexible(
                 child: Text(
                   tag,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.primaryLight,
-                      ),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AppColors.primaryLight),
                 ),
               ),
             ],
@@ -483,7 +590,11 @@ class _DreamDetailScreenState extends State<DreamDetailScreen> {
   Widget _buildCreatedAt(DreamModel dream) {
     return Row(
       children: [
-        const Icon(Icons.schedule_rounded, size: 14, color: AppColors.textMuted),
+        const Icon(
+          Icons.schedule_rounded,
+          size: 14,
+          color: AppColors.textMuted,
+        ),
         const SizedBox(width: 7),
         Expanded(
           child: Text(
@@ -534,7 +645,8 @@ class _InsightCard extends StatelessWidget {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(color: accent),
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(color: accent),
           ),
           const SizedBox(height: 4),
           detail,

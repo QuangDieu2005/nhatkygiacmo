@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/validators.dart';
 import '../../../models/dream_model.dart';
 import '../../../providers/dream_provider.dart';
 import '../../../shared/widgets/app_text_field.dart';
+import '../../../shared/widgets/empty_state.dart';
+import '../../../shared/widgets/loading_indicator.dart';
 import 'dream_form_widgets.dart';
 
 class EditDreamScreen extends StatefulWidget {
@@ -27,37 +30,69 @@ class _EditDreamScreenState extends State<EditDreamScreen> {
   bool _isLucid = false;
   List<String> _tags = [];
   bool _isSaving = false;
-  bool _initialized = false;
+  String? _initializedForId;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_initialized) return;
+  void initState() {
+    super.initState();
+    _requestDream(widget.dreamId);
+  }
 
-    final dream = context.read<DreamProvider>().getDreamById(widget.dreamId);
-    if (dream != null) {
-      _originalDream = dream;
-      _titleController = TextEditingController(text: dream.title);
-      _contentController = TextEditingController(text: dream.content);
-      _selectedEmotion = dream.emotion;
-      _dreamDate = dream.dreamDate;
-      _clarityScore = dream.clarityScore;
-      _isLucid = dream.isLucid;
-      _tags = List<String>.from(dream.tags);
-    }
-    _initialized = true;
+  @override
+  void didUpdateWidget(covariant EditDreamScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.dreamId == widget.dreamId) return;
+    _disposeControllers();
+    _originalDream = null;
+    _initializedForId = null;
+    _isSaving = false;
+    _requestDream(widget.dreamId);
+  }
+
+  void _requestDream(String id, {bool retry = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || widget.dreamId != id) return;
+      final dream = await context.read<DreamProvider>().loadDreamById(
+        id,
+        retry: retry,
+      );
+      if (!mounted || widget.dreamId != id || dream == null) return;
+      if (_initializedForId == id) return;
+      setState(() => _initializeForm(dream));
+    });
+  }
+
+  void _initializeForm(DreamModel dream) {
+    if (_initializedForId == dream.id) return;
+    _disposeControllers();
+    _originalDream = dream;
+    _titleController = TextEditingController(text: dream.title);
+    _contentController = TextEditingController(text: dream.content);
+    _selectedEmotion = dream.emotion;
+    _dreamDate = dream.dreamDate;
+    _clarityScore = dream.clarityScore;
+    _isLucid = dream.isLucid;
+    _tags = List<String>.from(dream.tags);
+    _initializedForId = dream.id;
+  }
+
+  void _disposeControllers() {
+    _titleController?.dispose();
+    _contentController?.dispose();
+    _titleController = null;
+    _contentController = null;
   }
 
   @override
   void dispose() {
-    _titleController?.dispose();
-    _contentController?.dispose();
+    _disposeControllers();
     super.dispose();
   }
 
   void _addTag(String value) {
     final tag = value.trim();
-    if (tag.isEmpty || _tags.any((existing) => existing.toLowerCase() == tag.toLowerCase())) {
+    if (tag.isEmpty ||
+        _tags.any((existing) => existing.toLowerCase() == tag.toLowerCase())) {
       return;
     }
     setState(() => _tags.add(tag));
@@ -67,7 +102,10 @@ class _EditDreamScreenState extends State<EditDreamScreen> {
     final original = _originalDream;
     final titleController = _titleController;
     final contentController = _contentController;
-    if (_isSaving || original == null || titleController == null || contentController == null) {
+    if (_isSaving ||
+        original == null ||
+        titleController == null ||
+        contentController == null) {
       return;
     }
     if (!_formKey.currentState!.validate()) return;
@@ -85,7 +123,9 @@ class _EditDreamScreenState extends State<EditDreamScreen> {
     );
 
     try {
-      final success = await context.read<DreamProvider>().updateDream(updatedDream);
+      final success = await context.read<DreamProvider>().updateDream(
+        updatedDream,
+      );
       if (!mounted) return;
       setState(() => _isSaving = false);
       if (success) {
@@ -117,49 +157,31 @@ class _EditDreamScreenState extends State<EditDreamScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final providerDream = context.watch<DreamProvider>().getDreamById(widget.dreamId);
+    final provider = context.watch<DreamProvider>();
+    final providerDream = provider.getDreamById(widget.dreamId);
     final original = _originalDream;
     final titleController = _titleController;
     final contentController = _contentController;
-    if (!_initialized || providerDream == null || original == null ||
-        titleController == null || contentController == null) {
-      return Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            tooltip: 'Quay lại',
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back_rounded),
-          ),
-          title: const Text('Chỉnh sửa giấc mơ'),
+    if (providerDream == null) {
+      return switch (provider.dreamRecordLoadStatus(widget.dreamId)) {
+        DreamRecordLoadStatus.error => _buildLoadError(
+          provider.dreamRecordError(widget.dreamId) ??
+              'Chưa thể tải giấc mơ này.',
         ),
-        body: DecoratedBox(
-          decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.cloud_off_rounded,
-                      color: AppColors.primaryLight, size: 38),
-                  const SizedBox(height: 14),
-                  Text(
-                    'Không tìm thấy giấc mơ này.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Quay lại danh sách và chọn một giấc mơ khác.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
+        DreamRecordLoadStatus.loaded => _buildNotFound(),
+        DreamRecordLoadStatus.idle ||
+        DreamRecordLoadStatus.loading => _buildLoading(),
+      };
+    }
+    if (_initializedForId != widget.dreamId ||
+        original == null ||
+        titleController == null ||
+        contentController == null) {
+      return _buildLoading();
+    }
+
+    if (providerDream.id != widget.dreamId) {
+      return _buildLoading();
     }
 
     return DreamFormPage(
@@ -189,13 +211,15 @@ class _EditDreamScreenState extends State<EditDreamScreen> {
               label: 'Tiêu đề giấc mơ',
               hint: 'Đặt tên ngắn gọn cho giấc mơ',
               prefixIcon: Icons.title_rounded,
-              validator: (value) => Validators.validateRequired(value, 'tiêu đề giấc mơ'),
+              validator: (value) =>
+                  Validators.validateRequired(value, 'tiêu đề giấc mơ'),
               keyboardType: TextInputType.text,
             ),
             const SizedBox(height: 20),
             const DreamFormSectionTitle(
               title: 'Câu chuyện giấc mơ',
-              subtitle: 'Chỉnh sửa nội dung nhưng giữ lại những gì bạn muốn nhớ.',
+              subtitle:
+                  'Chỉnh sửa nội dung nhưng giữ lại những gì bạn muốn nhớ.',
             ),
             AppTextField(
               controller: contentController,
@@ -203,14 +227,16 @@ class _EditDreamScreenState extends State<EditDreamScreen> {
               hint: 'Kể lại những hình ảnh và cảm xúc còn nhớ...',
               prefixIcon: Icons.edit_note_rounded,
               maxLines: 7,
-              validator: (value) => Validators.validateRequired(value, 'nội dung giấc mơ'),
+              validator: (value) =>
+                  Validators.validateRequired(value, 'nội dung giấc mơ'),
               keyboardType: TextInputType.multiline,
             ),
             const SizedBox(height: 22),
             const DreamFormSectionTitle(title: 'Cảm xúc khi thức dậy'),
             DreamEmotionSelector(
               value: _selectedEmotion,
-              onChanged: (emotion) => setState(() => _selectedEmotion = emotion),
+              onChanged: (emotion) =>
+                  setState(() => _selectedEmotion = emotion),
             ),
             const SizedBox(height: 22),
             const DreamFormSectionTitle(title: 'Mức độ ghi nhớ'),
@@ -226,7 +252,8 @@ class _EditDreamScreenState extends State<EditDreamScreen> {
             const SizedBox(height: 22),
             const DreamFormSectionTitle(
               title: 'Thẻ phân loại',
-              subtitle: 'Các thẻ hiện tại được giữ lại; bạn có thể thêm hoặc xóa.',
+              subtitle:
+                  'Các thẻ hiện tại được giữ lại; bạn có thể thêm hoặc xóa.',
             ),
             DreamTagEditor(
               tags: _tags,
@@ -239,4 +266,49 @@ class _EditDreamScreenState extends State<EditDreamScreen> {
       ),
     );
   }
+
+  Widget _buildLoading() => Scaffold(
+    appBar: AppBar(title: const Text('Chỉnh sửa giấc mơ')),
+    body: const DecoratedBox(
+      decoration: BoxDecoration(gradient: AppColors.nightSkyGradient),
+      child: Center(child: LoadingIndicator(message: 'Đang tải giấc mơ...')),
+    ),
+  );
+
+  Widget _buildLoadError(String message) => Scaffold(
+    appBar: AppBar(title: const Text('Chỉnh sửa giấc mơ')),
+    body: DecoratedBox(
+      decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
+      child: Center(
+        child: EmptyState(
+          icon: Icons.cloud_off_rounded,
+          title: 'Chưa tải được giấc mơ',
+          message: message,
+          actionLabel: 'Thử lại',
+          onAction: () => _requestDream(widget.dreamId, retry: true),
+        ),
+      ),
+    ),
+  );
+
+  Widget _buildNotFound() => Scaffold(
+    appBar: AppBar(
+      leading: IconButton(
+        tooltip: 'Quay lại',
+        onPressed: () => Navigator.of(context).maybePop(),
+        icon: const Icon(Icons.arrow_back_rounded),
+      ),
+      title: const Text('Chỉnh sửa giấc mơ'),
+    ),
+    body: DecoratedBox(
+      decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
+      child: Center(
+        child: EmptyState(
+          icon: Icons.auto_stories_outlined,
+          title: 'Không tìm thấy giấc mơ này.',
+          message: 'Quay lại danh sách và chọn một giấc mơ khác.',
+        ),
+      ),
+    ),
+  );
 }
