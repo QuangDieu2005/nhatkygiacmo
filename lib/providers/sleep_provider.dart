@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../models/sleep_session_model.dart';
 import '../models/sleep_statistics_model.dart';
 import '../models/dream_model.dart';
@@ -16,8 +18,14 @@ class SleepTrackingStartException implements Exception {
 }
 
 class SleepProvider extends ChangeNotifier {
-  final SleepRepository _repository = SleepRepository.instance;
-  final SleepTrackingService _trackingService = SleepTrackingService.instance;
+  SleepProvider({
+    SleepSessionRepository? repository,
+    SleepTrackingService? trackingService,
+  }) : _repository = repository ?? SleepRepository.instance,
+       _trackingService = trackingService ?? SleepTrackingService.instance;
+
+  final SleepSessionRepository _repository;
+  final SleepTrackingService _trackingService;
 
   List<SleepSessionModel> _sessions = [];
   SleepSessionModel? _activeSession;
@@ -102,7 +110,9 @@ class SleepProvider extends ChangeNotifier {
 
   Future<void> startTracking({String userId = 'user_01'}) async {
     if (_isStarting) {
-      throw const SleepTrackingStartException('Đang bắt đầu theo dõi giấc ngủ.');
+      throw const SleepTrackingStartException(
+        'Đang bắt đầu theo dõi giấc ngủ.',
+      );
     }
     if (_isStopping) {
       throw const SleepTrackingStartException('Đang lưu phiên ngủ hiện tại.');
@@ -173,14 +183,20 @@ class SleepProvider extends ChangeNotifier {
     }
   }
 
-  Future<SleepSessionModel?> stopTracking({String? notes, List<DreamModel>? dreams}) async {
-    if (_isStopping || _isStarting ||
+  Future<SleepSessionModel?> stopTracking({
+    String? notes,
+    List<DreamModel>? dreams,
+  }) async {
+    if (_isStopping ||
+        _isStarting ||
         (!isTracking && _pendingCompletedSession == null)) {
       return null;
     }
     _isStopping = true;
     try {
-      final completed = await _trackingService.prepareCompletedSession(notes: notes);
+      final completed = await _trackingService.prepareCompletedSession(
+        notes: notes,
+      );
       if (completed == null) return null;
 
       _pendingCompletedSession = completed;

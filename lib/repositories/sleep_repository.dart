@@ -2,8 +2,17 @@ import '../models/sleep_session_model.dart';
 import '../models/sleep_statistics_model.dart';
 import '../models/dream_model.dart';
 
-class SleepRepository {
+abstract interface class SleepSessionRepository {
+  Future<List<SleepSessionModel>> getAllSessions();
+  Future<void> addSession(SleepSessionModel session);
+  Future<SleepStatisticsModel> getStatistics({List<DreamModel>? dreams});
+}
+
+class SleepRepository implements SleepSessionRepository {
   SleepRepository._();
+
+  factory SleepRepository.forTesting() => SleepRepository._();
+
   static final SleepRepository instance = SleepRepository._();
 
   final List<SleepSessionModel> _sessions = [
@@ -24,7 +33,9 @@ class SleepRepository {
       id: 'session_2',
       userId: 'user_01',
       startTime: DateTime.now().subtract(const Duration(days: 1, hours: 16)),
-      endTime: DateTime.now().subtract(const Duration(days: 1, hours: 8, minutes: 30)),
+      endTime: DateTime.now().subtract(
+        const Duration(days: 1, hours: 8, minutes: 30),
+      ),
       durationMinutes: 450, // 7.5h
       qualityScore: 85,
       deepSleepMinutes: 110,
@@ -37,7 +48,9 @@ class SleepRepository {
       id: 'session_3',
       userId: 'user_01',
       startTime: DateTime.now().subtract(const Duration(days: 2, hours: 14)),
-      endTime: DateTime.now().subtract(const Duration(days: 2, hours: 7, minutes: 45)),
+      endTime: DateTime.now().subtract(
+        const Duration(days: 2, hours: 7, minutes: 45),
+      ),
       durationMinutes: 375, // 6h15
       qualityScore: 70,
       deepSleepMinutes: 80,
@@ -75,7 +88,9 @@ class SleepRepository {
       id: 'session_6',
       userId: 'user_01',
       startTime: DateTime.now().subtract(const Duration(days: 5, hours: 15)),
-      endTime: DateTime.now().subtract(const Duration(days: 5, hours: 8, minutes: 30)),
+      endTime: DateTime.now().subtract(
+        const Duration(days: 5, hours: 8, minutes: 30),
+      ),
       durationMinutes: 390, // 6.5h
       qualityScore: 74,
       deepSleepMinutes: 90,
@@ -97,14 +112,18 @@ class SleepRepository {
     ),
   ];
 
+  @override
   Future<List<SleepSessionModel>> getAllSessions() async {
     await Future.delayed(const Duration(milliseconds: 200));
     return List.unmodifiable(_sessions);
   }
 
+  @override
   Future<void> addSession(SleepSessionModel session) async {
     await Future.delayed(const Duration(milliseconds: 200));
-    final existingIndex = _sessions.indexWhere((existing) => existing.id == session.id);
+    final existingIndex = _sessions.indexWhere(
+      (existing) => existing.id == session.id,
+    );
     if (existingIndex >= 0) {
       // Treat retries as an upsert so the stored value and Provider use the
       // exact same snapshot, without creating a duplicate row.
@@ -114,6 +133,7 @@ class SleepRepository {
     _sessions.insert(0, session);
   }
 
+  @override
   Future<SleepStatisticsModel> getStatistics({List<DreamModel>? dreams}) async {
     await Future.delayed(const Duration(milliseconds: 200));
 
@@ -121,9 +141,15 @@ class SleepRepository {
       return SleepStatisticsModel.empty();
     }
 
-    final totalMinutes = _sessions.fold<int>(0, (sum, s) => sum + s.totalMinutes);
+    final totalMinutes = _sessions.fold<int>(
+      0,
+      (sum, s) => sum + s.totalMinutes,
+    );
     final avgHours = (totalMinutes / _sessions.length) / 60.0;
-    final totalQuality = _sessions.fold<int>(0, (sum, s) => sum + s.qualityScore);
+    final totalQuality = _sessions.fold<int>(
+      0,
+      (sum, s) => sum + s.qualityScore,
+    );
     final avgQuality = (totalQuality / _sessions.length).round();
 
     final dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
