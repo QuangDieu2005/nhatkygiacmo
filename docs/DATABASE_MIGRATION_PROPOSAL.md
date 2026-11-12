@@ -1,4 +1,4 @@
-﻿# Đề xuất migration database — chưa thực thi
+# Đề xuất migration database — chưa thực thi
 
 **Trạng thái:** tài liệu đề xuất. Không sửa/chạy `supabase_schema.sql`, không kết nối database. Cần review và phê duyệt riêng trước migration.
 
@@ -30,7 +30,7 @@
 - `deep_sleep_minutes`, `light_sleep_minutes`, `rem_sleep_minutes integer not null default 0 check >= 0`.
 - `notes text not null default ''`.
 - `created_at timestamptz not null default now()`.
-- Check `end_time >= start_time`; cân nhắc `duration_minutes` consistency. Không áp constraint stage sum == duration đến khi thống nhất cách làm tròn/ước lượng.
+- Check `end_time > start_time`; `duration_minutes` được Express tính bằng floor số phút giữa hai instant và lưu cùng record. Client không cung cấp giá trị authoritative. Nếu cần DB constraint consistency thì phải biểu diễn cùng phép tính elapsed seconds; xác minh cách làm trên PostgreSQL trước khi viết migration. Không áp constraint stage sum == duration vì stage là ước lượng/làm tròn.
 - Index `(user_id, created_at desc)` và có thể `(user_id, start_time desc)`.
 
 `UserModel.sleepGoalHours`, `notificationsEnabled`, `avatarUrl` hiện chưa có bảng/API đã xác nhận; không tự tạo profile/settings table trong migration này. Giữ cục bộ đến khi có yêu cầu sản phẩm.
@@ -72,8 +72,7 @@ Giữ RLS bật trên bảng. Policy cho authenticated owner `auth.uid() = user_
 - Có dữ liệu thật trong các bảng hiện hữu không, format timezone của sleep text là gì?
 - Có app/backend client đã phát hành dùng bigint/legacy columns không?
 - Chọn `end_time NOT NULL` và chỉ sync phiên hoàn tất hay cần draft đa thiết bị?
-- `quality_score` nullable hay luôn bắt buộc; duration được client gửi hay server tính?
+- `quality_score` nullable hay luôn bắt buộc? Quy tắc duration đã thống nhất: server tính từ timestamp, client không gửi.
 - Định dạng/tag delimiter dữ liệu cũ và có dấu phẩy bên trong tag không?
 
 Không suy đoán các điểm này; cần inventory và quyết định trước khi viết migration executable.
-

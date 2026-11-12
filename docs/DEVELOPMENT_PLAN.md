@@ -1,4 +1,4 @@
-﻿# DEVELOPMENT_PLAN — Dream Diary
+# DEVELOPMENT_PLAN — Dream Diary
 
 Kế hoạch theo kiến trúc đã được chọn: **Flutter → Node.js/Express REST API → Supabase PostgreSQL/Auth**. Flutter không dùng Supabase Flutter trực tiếp cho CRUD nghiệp vụ. Tài liệu giai đoạn 2 chuẩn hóa hợp đồng; chưa triển khai kết nối hoặc migration.
 
@@ -10,7 +10,7 @@ Kế hoạch theo kiến trúc đã được chọn: **Flutter → Node.js/Expre
 - `docs/DATA_CONTRACT.md`: ánh xạ models ↔ DTO ↔ DB, required/optional/internal fields.
 - `docs/API_SPECIFICATION.md`: endpoint và auth/session/error contract mục tiêu; nêu rõ endpoint hiện hữu/thiếu.
 - `docs/DATABASE_MIGRATION_PROPOSAL.md`: schema đích và migration additive có điều kiện, chưa chạy.
-- Chủ dự án xác nhận các điểm mở về ngày giấc mơ, quality nullable, active sleep sync, profile/settings và migration dữ liệu hiện hữu.
+- Các điểm còn mở: ngày giấc mơ khi đổi timezone, quality nullable, active sleep sync, profile/settings và dữ liệu migration hiện hữu. Duration do Express tính; GET trả JSON array trực tiếp ở bản đầu.
 
 ## Giai đoạn 3 — Chuẩn hóa cấu hình/bảo mật
 - Thay config dự án cụ thể trong server `.env.example` bằng placeholder; không hiển thị env thật.
@@ -25,7 +25,7 @@ Kế hoạch theo kiến trúc đã được chọn: **Flutter → Node.js/Expre
 ## Giai đoạn 5 — Hợp đồng dữ liệu và repository
 - Cập nhật migration riêng đã phê duyệt; chạy staging/backup/restore trước production.
 - Cập nhật model serialization/repositories và Express validation/routes theo contract mà không bỏ trường domain.
-- Dream CRUD, completed sleep CRUD, owner scope và pagination/filter; fixture tiếp tục chỉ cục bộ/test.
+- Dream CRUD, completed sleep CRUD, owner scope và filter; GET trả array trực tiếp, chưa pagination. Express tính duration từ timestamp. Fixture tiếp tục chỉ cục bộ/test.
 - Giữ active tracking local ở bản đầu nếu chưa có quyết định sync đa thiết bị.
 
 ## Giai đoạn 6 — Analytics, notification, kiểm chứng

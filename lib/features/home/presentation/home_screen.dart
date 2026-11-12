@@ -1,15 +1,15 @@
-import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../models/sleep_session_model.dart';
+import '../../../models/sleep_statistics_model.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/dream_provider.dart';
 import '../../../providers/sleep_provider.dart';
-import '../../../models/sleep_session_model.dart';
-import '../../../models/sleep_statistics_model.dart';
 import '../../../shared/widgets/dream_card.dart';
 import '../../../shared/widgets/section_header.dart';
 import '../../../shared/widgets/sleep_quality_indicator.dart';
@@ -50,104 +50,68 @@ class _HomeScreenState extends State<HomeScreen> {
     final auth = context.watch<AuthProvider>();
     final sleep = context.watch<SleepProvider>();
     final dream = context.watch<DreamProvider>();
-
-    final userName = auth.user?.name ?? 'Bạn';
     final latestSession = sleep.sessions.isNotEmpty ? sleep.sessions.first : null;
-    final stats = sleep.statistics;
+    final today = DateTime.now();
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.nightSkyGradient,
-        ),
+      body: DecoratedBox(
+        decoration: const BoxDecoration(gradient: AppColors.nightSkyGradient),
         child: SafeArea(
           child: RefreshIndicator(
+            color: AppColors.primaryLight,
+            backgroundColor: AppColors.surface,
             onRefresh: () async {
               await dream.loadDreams();
               await sleep.loadSessions(dreams: dream.allDreams);
             },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header Lời chào & Ngày hiện tại
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final horizontalPadding = constraints.maxWidth < 360 ? 16.0 : 22.0;
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(horizontalPadding, 18, horizontalPadding, 28),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 680),
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '${_getGreeting()}, $userName ✨',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
+                          _buildHeader(auth.user?.name ?? 'Bạn', today),
+                          const SizedBox(height: 26),
+                          _buildSleepSummaryCard(
+                            latestSession,
+                            dream.allDreams.length,
+                            sleep.isLoading,
+                          ),
+                          const SizedBox(height: 20),
+                          _buildQuickActionButtons(context, sleep.isTracking),
+                          const SizedBox(height: 30),
+                          SectionHeader(
+                            title: 'Giấc ngủ 7 ngày qua',
+                            subtitle: 'Thời lượng theo từng đêm',
+                            action: TextButton(
+                              onPressed: () => context.go(AppRoutes.analytics),
+                              child: const Text('Chi tiết'),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${DateFormatter.formatWeekday(DateTime.now())}, ${DateFormatter.formatDate(DateTime.now())}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
+                          const SizedBox(height: 12),
+                          _buildWeeklyBarChart(sleep.statistics),
+                          const SizedBox(height: 28),
+                          SectionHeader(
+                            title: 'Giấc mơ gần đây',
+                            action: TextButton(
+                              onPressed: () => context.go(AppRoutes.dreamDiary),
+                              child: const Text('Xem tất cả'),
                             ),
                           ),
+                          const SizedBox(height: 10),
+                          _buildRecentDreams(dream),
                         ],
                       ),
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.divider),
-                        ),
-                        child: const Icon(
-                          Icons.notifications_none_rounded,
-                          color: AppColors.primaryLight,
-                          size: 22,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Card Tổng quan giấc ngủ đêm qua & Thống kê nhanh
-                  _buildSleepSummaryCard(latestSession, stats),
-                  const SizedBox(height: 24),
-
-                  // 2 Nút hành động chính: Bắt đầu theo dõi ngủ & Ghi giấc mơ
-                  _buildQuickActionButtons(context, sleep.isTracking),
-                  const SizedBox(height: 28),
-
-                  // Biểu đồ giấc ngủ 7 ngày qua
-                  SectionHeader(
-                    title: 'Giấc ngủ 7 ngày qua',
-                    subtitle: 'Thời lượng ngủ tính theo giờ mỗi đêm',
-                    action: TextButton(
-                      onPressed: () => context.go(AppRoutes.analytics),
-                      child: const Text('Chi tiết', style: TextStyle(color: AppColors.primaryLight)),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  _buildWeeklyBarChart(stats),
-                  const SizedBox(height: 28),
-
-                  // Giấc mơ gần nhất
-                  SectionHeader(
-                    title: 'Giấc mơ gần đây',
-                    action: TextButton(
-                      onPressed: () => context.go(AppRoutes.dreamDiary),
-                      child: const Text('Xem tất cả', style: TextStyle(color: AppColors.primaryLight)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildRecentDreams(dream),
-                  const SizedBox(height: 20),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ),
@@ -155,24 +119,79 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSleepSummaryCard(SleepSessionModel? latestSession, SleepStatisticsModel stats) {
-    final durationHours = latestSession != null
-        ? (latestSession.totalMinutes / 60.0).toStringAsFixed(1)
-        : '0.0';
-    final qualityScore = latestSession?.qualityScore ?? 0;
-    final totalDreams = stats.totalRecordedDreams;
+  Widget _buildHeader(String userName, DateTime today) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _getGreeting(),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.primaryLight,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                userName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${DateFormatter.formatWeekday(today)}, ${DateFormatter.formatDate(today)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: AppColors.surface.withOpacity(0.9),
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: const Icon(
+            Icons.nightlight_round,
+            color: AppColors.starGold,
+            size: 21,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSleepSummaryCard(
+    SleepSessionModel? latestSession,
+    int dreamCount,
+    bool isLoading,
+  ) {
+    final hasSession = latestSession != null;
+    final duration = hasSession
+        ? '${(latestSession!.totalMinutes / 60).toStringAsFixed(1)}h'
+        : '—';
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: AppColors.cardGradient,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.primary.withOpacity(0.25)),
+        border: Border.all(color: AppColors.primary.withOpacity(0.24)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.12),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
+            color: AppColors.primaryDark.withOpacity(0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -180,212 +199,170 @@ class _HomeScreenState extends State<HomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
-                children: [
-                  Icon(Icons.bedtime, color: AppColors.starGold, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Đêm qua của bạn',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppColors.starGold.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(13),
                 ),
-                child: Text(
-                  latestSession != null ? DateFormatter.formatRelative(latestSession.startTime) : 'Chưa có dữ liệu',
-                  style: const TextStyle(fontSize: 11, color: AppColors.primaryLight),
+                child: const Icon(Icons.bedtime_rounded, color: AppColors.starGold, size: 20),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Tổng quan giấc ngủ', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasSession
+                          ? 'Đêm ${DateFormatter.formatRelative(latestSession!.startTime)}'
+                          : 'Đêm gần nhất',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
               ),
+              if (isLoading && !hasSession)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                Icon(
+                  hasSession ? Icons.nights_stay_rounded : Icons.auto_awesome,
+                  color: AppColors.primaryLight,
+                  size: 20,
+                ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 22),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Thời lượng ngủ
-              Column(
-                children: [
-                  Text(
-                    '${durationHours}h',
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Thời lượng ngủ',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                ],
+              Expanded(
+                child: _buildSummaryMetric(
+                  label: 'Thời lượng ngủ',
+                  value: duration,
+                  icon: Icons.schedule_rounded,
+                  accent: AppColors.secondary,
+                ),
               ),
-
-              // Vòng tròn điểm chất lượng
-              SleepQualityIndicator(score: qualityScore, size: 84),
-
-              // Số giấc mơ
-              Column(
-                children: [
-                  Text(
-                    '$totalDreams',
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Giấc mơ ghi lại',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                ],
+              const SizedBox(width: 8),
+              if (hasSession)
+                SleepQualityIndicator(score: latestSession!.qualityScore, size: 76)
+              else
+                _buildQualityEmptyState(),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildSummaryMetric(
+                  label: 'Giấc mơ đã ghi',
+                  value: '$dreamCount',
+                  icon: Icons.auto_awesome_rounded,
+                  accent: AppColors.primaryLight,
+                  alignEnd: true,
+                ),
               ),
             ],
           ),
+          if (!hasSession && !isLoading) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surface.withOpacity(0.72),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                'Chưa có phiên ngủ nào. Bắt đầu theo dõi để xem thống kê của bạn.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildSummaryMetric({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color accent,
+    bool alignEnd = false,
+  }) {
+    return Column(
+      crossAxisAlignment: alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+          children: [
+            Icon(icon, size: 15, color: accent),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontSize: 23,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Text(
+          label,
+          maxLines: 2,
+          textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 11),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQualityEmptyState() {
+    return Container(
+      width: 76,
+      height: 76,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.surface.withOpacity(0.72),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: const Icon(Icons.bedtime_outlined, color: AppColors.textMuted, size: 27),
     );
   }
 
   Widget _buildQuickActionButtons(BuildContext context, bool isTrackingActive) {
     return Row(
       children: [
-        // Nút Theo dõi giấc ngủ
         Expanded(
-          child: GestureDetector(
+          child: _QuickActionCard(
+            title: isTrackingActive ? 'Đang theo dõi' : 'Theo dõi giấc ngủ',
+            subtitle: isTrackingActive ? 'Chạm để xem phiên' : 'Bắt đầu phiên ngủ',
+            icon: isTrackingActive ? Icons.bedtime_rounded : Icons.nights_stay_rounded,
+            gradient: isTrackingActive
+                ? const LinearGradient(colors: [Color(0xFFBD6676), Color(0xFF895A9D)])
+                : AppColors.sleepGradient,
             onTap: () => context.go(AppRoutes.sleepTracking),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-              decoration: BoxDecoration(
-                gradient: isTrackingActive
-                    ? const LinearGradient(colors: [Color(0xFFEF4444), Color(0xFFDC2626)])
-                    : AppColors.sleepGradient,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: (isTrackingActive ? AppColors.error : AppColors.secondary)
-                        .withOpacity(0.3),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isTrackingActive ? Icons.stop_rounded : Icons.bedtime_rounded,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isTrackingActive ? 'Đang ngủ...' : 'Theo dõi ngủ',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          isTrackingActive ? 'Chạm để dừng' : 'Bắt đầu phiên',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withOpacity(0.85),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         ),
         const SizedBox(width: 12),
-
-        // Nút Ghi lại giấc mơ
         Expanded(
-          child: GestureDetector(
+          child: _QuickActionCard(
+            title: 'Ghi giấc mơ',
+            subtitle: 'Lưu lại đêm qua',
+            icon: Icons.edit_note_rounded,
+            gradient: AppColors.dreamGradient,
             onTap: () => context.push(AppRoutes.addDream),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-              decoration: BoxDecoration(
-                gradient: AppColors.dreamGradient,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.3),
-                    blurRadius: 14,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.edit_note_rounded,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Ghi giấc mơ',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Lưu giữ cảm xúc',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withOpacity(0.85),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         ),
       ],
@@ -395,37 +372,31 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildWeeklyBarChart(SleepStatisticsModel stats) {
     final weekly = stats.weeklyStats;
     if (weekly.isEmpty) {
-      return Container(
-        height: 180,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: const Text('Chưa có đủ dữ liệu giấc ngủ', style: TextStyle(color: AppColors.textMuted)),
+      return _EmptyPanel(
+        icon: Icons.bar_chart_rounded,
+        message: 'Chưa có dữ liệu giấc ngủ trong tuần này.',
       );
     }
 
     return Container(
-      height: 210,
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+      height: 224,
+      padding: const EdgeInsets.fromLTRB(12, 18, 16, 10),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        color: AppColors.surface.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: AppColors.divider),
       ),
       child: BarChart(
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
           maxY: 12,
+          minY: 0,
           barTouchData: BarTouchData(
             touchTooltipData: BarTouchTooltipData(
-              getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                return BarTooltipItem(
-                  '${rod.toY.toStringAsFixed(1)} giờ',
-                  const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                );
-              },
+              getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem(
+                '${rod.toY.toStringAsFixed(1)} giờ',
+                const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
+              ),
             ),
           ),
           titlesData: FlTitlesData(
@@ -435,35 +406,32 @@ class _HomeScreenState extends State<HomeScreen> {
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
-                reservedSize: 28,
+                reservedSize: 27,
                 interval: 4,
-                getTitlesWidget: (value, meta) {
-                  return Text(
-                    '${value.toInt()}h',
-                    style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
-                  );
-                },
+                getTitlesWidget: (value, meta) => Text(
+                  '${value.toInt()}h',
+                  style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
+                ),
               ),
             ),
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
+                reservedSize: 28,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
-                  if (index >= 0 && index < weekly.length) {
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(
-                        weekly[index].dayLabel,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11,
-                        ),
+                  if (index < 0 || index >= weekly.length) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 7),
+                    child: Text(
+                      weekly[index].dayLabel,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 10,
                       ),
-                    );
-                  }
-                  return const SizedBox.shrink();
+                    ),
+                  );
                 },
               ),
             ),
@@ -480,23 +448,19 @@ class _HomeScreenState extends State<HomeScreen> {
           borderData: FlBorderData(show: false),
           barGroups: List.generate(weekly.length, (index) {
             final stat = weekly[index];
-            final isGood = stat.hours >= 7.0;
+            final reachedGoal = stat.hours >= 7;
             return BarChartGroupData(
               x: index,
               barRods: [
                 BarChartRodData(
-                  toY: stat.hours,
-                  gradient: isGood
-                      ? AppColors.primaryGradient
-                      : const LinearGradient(
-                          colors: [Color(0xFF3B82F6), Color(0xFF60A5FA)],
-                        ),
-                  width: 16,
+                  toY: stat.hours.clamp(0, 12).toDouble(),
+                  gradient: reachedGoal ? AppColors.primaryGradient : AppColors.sleepGradient,
+                  width: weekly.length > 5 ? 14 : 20,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
                   backDrawRodData: BackgroundBarChartRodData(
                     show: true,
                     toY: 12,
-                    color: AppColors.surfaceLight.withOpacity(0.4),
+                    color: AppColors.surfaceLight.withOpacity(0.42),
                   ),
                 ),
               ],
@@ -508,31 +472,150 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRecentDreams(DreamProvider dream) {
-    final recentDreams = dream.allDreams.take(3).toList();
-
-    if (recentDreams.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(24),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: const Text(
-          'Chưa có giấc mơ nào. Hãy ghi lại giấc mơ đầu tiên nhé!',
-          style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+    if (dream.isLoading && dream.allDreams.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 28),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (dream.allDreams.isEmpty) {
+      return _EmptyPanel(
+        icon: Icons.auto_awesome_outlined,
+        message: 'Chưa có giấc mơ nào. Hãy ghi lại giấc mơ đầu tiên nhé!',
+        action: TextButton.icon(
+          onPressed: () => context.push(AppRoutes.addDream),
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Ghi giấc mơ'),
         ),
       );
     }
 
     return Column(
-      children: recentDreams.map((d) {
+      children: dream.allDreams.take(3).map((entry) {
         return DreamCard(
-          dream: d,
-          onTap: () => context.push('${AppRoutes.dreamDetail}/${d.id}'),
+          dream: entry,
+          onTap: () => context.push('${AppRoutes.dreamDetail}/${entry.id}'),
         );
       }).toList(),
+    );
+  }
+}
+
+class _QuickActionCard extends StatelessWidget {
+  const _QuickActionCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.gradient,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Gradient gradient;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(19),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryDark.withOpacity(0.13),
+              blurRadius: 16,
+              offset: const Offset(0, 7),
+            ),
+          ],
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(19),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 15),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.16),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 21),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          height: 1.2,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.82),
+                          fontSize: 10,
+                          height: 1.25,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyPanel extends StatelessWidget {
+  const _EmptyPanel({required this.icon, required this.message, this.action});
+
+  final IconData icon;
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.82),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: AppColors.primaryLight, size: 25),
+          const SizedBox(height: 9),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          if (action != null) ...[const SizedBox(height: 8), action!],
+        ],
+      ),
     );
   }
 }

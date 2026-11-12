@@ -1,4 +1,4 @@
-﻿# Hợp đồng dữ liệu đề xuất — Dream Diary
+# Hợp đồng dữ liệu đề xuất — Dream Diary
 
 **Trạng thái:** đề xuất thiết kế cho kiến trúc đã chọn Flutter → Express REST → Supabase. Chưa áp dụng vào model, API hay database. Đây là hợp đồng mục tiêu; các trường/bảng hiện tại không tương thích như nêu dưới đây.
 
@@ -38,7 +38,7 @@ POST/PATCH nhận `title`, `content`, `emotion`, `tags`, `clarity_score`, `is_lu
 | `user_id` | UUID | NOT NULL; server gán từ JWT | `String userId` |
 | `start_time` | TIMESTAMPTZ | NOT NULL; instant UTC | `DateTime startTime` |
 | `end_time` | TIMESTAMPTZ | nullable khi là bản nháp đang ngủ; bản ghi hoàn tất gửi API phải có | `DateTime? endTime` |
-| `duration_minutes` | INTEGER | bản ghi hoàn tất: 0..1440; server kiểm tra khớp thời gian hoặc tính từ start/end theo chính sách thống nhất | `int? durationMinutes` |
+| `duration_minutes` | INTEGER | bản ghi hoàn tất: Express tự tính từ `start_time` và `end_time`; client không gửi/không được tin giá trị này. Kết quả là số phút nguyên, giới hạn 0..1440 | `int? durationMinutes` (response/domain only) |
 | `quality_score` | SMALLINT | 0..100, nullable khi chưa đánh giá hoặc có quy tắc mặc định rõ ràng | `int qualityScore` (domain hiện default 75) |
 | `deep_sleep_minutes` | INTEGER | NOT NULL default 0, không âm | `int deepSleepMinutes` |
 | `light_sleep_minutes` | INTEGER | NOT NULL default 0, không âm | `int lightSleepMinutes` |
@@ -47,7 +47,7 @@ POST/PATCH nhận `title`, `content`, `emotion`, `tags`, `clarity_score`, `is_lu
 | `created_at` | TIMESTAMPTZ | database sinh UTC | `DateTime createdAt` |
 | `isTracking` | không lưu ở record đã hoàn tất | trạng thái active chỉ cục bộ; không gửi | `bool isTracking`, giữ trong model để tương thích domain |
 
-Lưu `start_time`/`end_time` là UTC instant; UI chuyển qua timezone thiết bị khi hiển thị. `duration_minutes` có thể lưu để snapshot/history và query thuận tiện, nhưng server phải chọn nguồn chuẩn: khuyến nghị tính từ hai timestamp khi hoàn tất, chỉ cho phép duration gửi từ client nếu sai lệch được validate. Các stage minutes hiện là ước lượng, không được trình bày như thiết bị đo.
+Lưu `start_time`/`end_time` là UTC instant trong `TIMESTAMPTZ`; JSON phải là ISO-8601 có `Z` hoặc offset rõ ràng (ví dụ `+07:00`). Express từ chối timestamp sai định dạng hoặc thiếu timezone offset, chuẩn hóa về UTC, yêu cầu `end_time > start_time`, và từ chối khoảng thời gian vượt 24 giờ. Không diễn giải timestamp thiếu timezone theo timezone máy chủ. Express tự tính `duration_minutes = floor((end_time - start_time) / 60 giây)`; khoảng thời gian dương dưới một phút có duration 0. Client không gửi duration; khuyến nghị Express reject nếu request có trường này để phát hiện client lệch contract. PATCH đổi timestamp cũng tính lại duration. UI chuyển UTC instant sang timezone thiết bị khi hiển thị. Các stage minutes hiện là ước lượng, không được trình bày như thiết bị đo.
 
 Còn cần quyết định: cho phép ghi nhận session dưới 1 phút (hiện schema cho 0, service có thể sinh 0); quality có bắt buộc không; quan hệ tổng stage minutes với duration (ước lượng có thể lệch do làm tròn). Không tự đặt constraint chặt trước khi thống nhất nghiệp vụ.
 
@@ -62,7 +62,7 @@ Còn cần quyết định: cho phép ghi nhận session dưới 1 phút (hiện
 ## Bắt buộc/tùy chọn/nội bộ
 
 - **Bắt buộc khi tạo dream:** `title`, `content`, `emotion`, `dream_date`; `tags`, `clarity_score`, `is_lucid` có mặc định nếu client bỏ qua.
-- **Bắt buộc khi tạo completed sleep:** `start_time`, `end_time`; quality/stage/notes theo mặc định/nullable đã nêu; duration tính/validate server-side.
+- **Bắt buộc khi tạo completed sleep:** `start_time`, `end_time`; quality/stage/notes theo mặc định/nullable đã nêu; Express tính duration từ hai timestamp đã xác thực. Client không gửi duration.
 - **Chỉ server/database:** `id`, `user_id`, `created_at` trong create request.
 - **Nội bộ/local:** active `isTracking`; có thể là bản nháp local trước khi hoàn thành. Các cài đặt UserModel chưa có profile API vẫn giữ cục bộ.
 - **Chỉ auth:** password/refresh token không bao giờ thuộc DTO hồ sơ hoặc bản ghi nghiệp vụ.

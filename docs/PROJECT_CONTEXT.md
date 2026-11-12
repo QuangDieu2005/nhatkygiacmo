@@ -1,4 +1,4 @@
-﻿# PROJECT_CONTEXT — Dream Diary
+# PROJECT_CONTEXT — Dream Diary
 
 Ngày rà soát bổ sung: 2026-11-12. Phạm vi giai đoạn 2 là tài liệu thiết kế. Không đọc `.env`/`server/.env`, không gọi Supabase. GitHub chưa được đối chiếu; ghi nhận theo checkout local.
 
@@ -28,7 +28,7 @@ Chi tiết đầy đủ ở `docs/DATA_CONTRACT.md`, endpoint ở `docs/API_SPEC
 3. Auth API trả `{user, session}` với Supabase `access_token`/`refresh_token`; AuthService mock kỳ vọng `{user, token}`. Signup backend trả 202/session null khi confirmation required; provider không có trạng thái pending.
 4. Forgot password chưa có backend route. Logout backend cần Bearer access token nhưng client chưa gọi. Refresh route tồn tại nhưng client không dùng.
 5. Backend route sleep là `/sleep-records`, Flutter stub nhắc `/sleep-sessions`. URL/API port lệch.
-6. GET list hiện trả array trực tiếp; spec đề xuất envelope pagination nhưng đây là lựa chọn compatibility cần chốt trước implement.
+6. GET list bản đầu thống nhất trả JSON array trực tiếp; chưa pagination envelope. Có thể mở rộng pagination sau bằng contract/version tương thích mới.
 
 ## Bảo mật/cấu hình
 - Không mở file `.env` hay `server/.env`; `.env.example` root dùng placeholder. Server env example có tên biến đúng nhưng đã ghi nhận ở giai đoạn trước có Supabase project config cụ thể; phải thay placeholder trước chia sẻ.
@@ -40,9 +40,9 @@ Chi tiết đầy đủ ở `docs/DATA_CONTRACT.md`, endpoint ở `docs/API_SPEC
 ## Decisions còn mở
 - DATE hay TIMESTAMPTZ cho dream date: đề xuất DATE.
 - Chỉ sync session hoàn tất hay lưu active session đa thiết bị: đề xuất chỉ completed ở bản đầu.
-- `quality_score` bắt buộc hay nullable; duration server tính hay validate input.
+- `quality_score` bắt buộc hay nullable; quy tắc floor duration đã thống nhất trong contract.
 - Dữ liệu cũ có thật không, sleep text có timezone nào, tag delimiter là gì, consumer dùng bigint nào.
-- Pagination envelope hay giữ list array.
+- Không còn mở: bản đầu trả list array; pagination có thể bổ sung sau.
 - Profile/settings cần server-side hay tiếp tục local.
 
 Không suy đoán thay chủ dự án. Xem migration proposal để biết các câu hỏi cần inventory/approval.
