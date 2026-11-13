@@ -108,3 +108,19 @@ Chỉ cập nhật tài liệu. Không đọc/sửa `.env` hoặc `server/.env`;
 - Account-data deletion endpoint hiện chỉ đụng legacy tables và không atomic; thiết kế việc xử lý target tables là blocker trước expose CRUD.
 
 Các điều kiện backup/restore, staging, stop conditions và phê duyệt thực thi được cụ thể hóa trong `docs/SUPABASE_MIGRATION_PLAN.md`. Chưa có SQL executable hoặc thao tác Supabase trong Đợt 8E.3.
+
+## 10. Đợt 8E.4 — SQL schema draft (chưa phê duyệt/chưa chạy)
+
+Đã chuẩn bị `supabase/migrations/DRAFT_ONLY_create_api_v2_tables.sql` làm bản DDL review-only cho `dreams_v2` và `sleep_records_v2`. Đây vẫn là SQL có thể thực thi, không được chạy bằng Supabase CLI/SQL Editor cho tới khi chủ dự án duyệt riêng. File không dùng version timestamp, không backfill và không sửa legacy objects.
+
+Đề xuất trong draft: UUID PK với `gen_random_uuid()`, owner FK cascade, types/defaults/checks theo API, RLS CRUD owner policies. Vì Flutter chỉ đi qua Express, quyền trực tiếp của PUBLIC/anon/authenticated bị revoke trên hai bảng mới; CRUD table grants chỉ cấp cho `service_role` ở server. RLS không thay ownership filter của backend vì service_role bypass RLS. Các policies authenticated được định nghĩa nhưng chưa có table grants, nên không mở direct access.
+
+Các lựa chọn trong draft **chưa được phê duyệt**: tên `*_v2`, các defaults, emotion CHECK, quyền service_role, indexes và cấu hình RLS. Cần review compatibility với Supabase grants/default privileges ở staging. Routes Express hiện còn truy cập bảng legacy; migration draft không khiến CRUD hoạt động với target. Phải xử lý account deletion target trước khi cutover. Không có DDL/DML nào được chạy trong 8E.4.
+
+### Chủ dự án cần duyệt trước khi thực thi
+
+1. Bảng và constraint/default chính xác, đặc biệt emotion CHECK và server/database ownership của UUID.
+2. Least-privilege grants cho server-only `service_role`; xác nhận không cần direct client grants.
+3. Indexes và RLS policies trên staging, bao gồm cross-user tests và xác nhận service_role bypass có chủ đích.
+4. Recheck live schema/counts, backup + restore rehearsal, staging, cutover, rollback và account-data deletion behavior.
+5. Tên migration/version, project/environment, người thực hiện và cửa sổ thực thi.

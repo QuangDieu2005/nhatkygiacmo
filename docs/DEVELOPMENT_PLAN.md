@@ -67,3 +67,8 @@ Không bắt đầu migration executable trước khi có inventory, quyết đ�
 - Inventory live chi tiết do chủ dự án cung cấp đã được áp dụng vào migration design. Counts 0/0 là snapshot, cần recheck ngay trước migration.
 - Phương án đề xuất để review: bảng contract mới song song, giữ nguyên legacy schema/data; nếu count khác 0, dừng backfill cho đến khi mapping được phê duyệt.
 - Chưa migration/cutover. Chờ approval về target naming/grants, mappings nếu phát sinh rows, backup/restore, staging reconciliation, consumer freeze và rollback owner. Account-data deletion hiện chỉ xử lý legacy tables và không atomic; cần thiết kế trước khi mở CRUD target.
+
+## Cập nhật sau Đợt 8E.4 — 2026-11-13
+
+- Có SQL DDL draft-only tạo `dreams_v2`/`sleep_records_v2`, owner RLS policies, least-privilege server grants và indexes theo API query patterns. Draft chưa chạy, chưa được phê duyệt, không backfill và không thay legacy tables.
+- Bước tiếp theo là review DDL/defaults/constraints/grants trên giấy; sau đó phê duyệt riêng staging rehearsal và backup/restore. Không chuyển Express CRUD sang target trước khi xử lý account-data deletion, ownership tests, route compatibility, rollback và phê duyệt cutover.

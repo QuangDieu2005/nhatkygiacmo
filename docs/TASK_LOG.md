@@ -354,3 +354,12 @@
 - Kiểm tra consistency với backend routes/validation: routes hiện query `dreams`/`sleep_records` theo fields contract mới và cần target schema/API rollout trước khi bật CRUD. `git diff --check`: PASS.
 - File cập nhật trong Đợt 8E.3: `docs/8E_MIGRATION_DECISIONS.md`, `docs/SUPABASE_MIGRATION_PLAN.md`, `docs/8E2_INVENTORY_GUIDE.md`, `docs/PROJECT_CONTEXT.md`, `docs/DEVELOPMENT_PLAN.md`, `docs/TASK_LOG.md`. Không chạy test/linter vì chỉ thay đổi tài liệu.
 - Chỉ cập nhật tài liệu. Không đọc/sửa `.env`/`server/.env`; không kết nối/chạy SQL, migration, backup hoặc restore; không sửa code/schema/policy/grants/data; không commit/push.
+
+## Đợt 8E.4 — Tạo SQL migration tương thích API (DRAFT ONLY) (2026-11-13)
+
+- Tạo `supabase/migrations/DRAFT_ONLY_create_api_v2_tables.sql` cho hai bảng mới `dreams_v2` và `sleep_records_v2`; file có cảnh báo NOT EXECUTED và tên không theo version timestamp để tránh nhầm là migration đã duyệt. DDL không sửa legacy tables, không backfill và không có thao tác xóa/đổi tên.
+- Đối chiếu `server/src/validation.js`, routes, API specification và data contract: Dream emotion enum/clarity 1–5/tags text[]/dream_date DATE; Sleep timestamps, duration do Express tính và DB consistency check, quality 0–100, stages không âm, notes; UUID PK, owner FK cascade, created_at defaults.
+- Draft bật RLS và tạo bốn policy owner-scoped cho mỗi bảng. Quyền bảng được revoke cho PUBLIC/anon/authenticated; chỉ grant CRUD cho server-only `service_role`, do Flutter không truy cập Supabase trực tiếp. Ghi rõ service_role bypass RLS nên Express vẫn cần owner filter từ JWT đã xác minh.
+- Thêm PK tự sinh và indexes theo list/filter API: user+created, user+dream_date, GIN tags, user+start_time. API routes hiện vẫn gọi legacy table names; draft không bật CRUD và account deletion chưa bao gồm target.
+- Static review: kiểm tra cột/types/defaults/checks/FK/policies/grants/indexes và không có DROP/TRUNCATE/legacy ALTER, backfill/DML. `git diff --check`: chạy sau cập nhật; không chạy SQL, không kết nối Supabase, không chạy migration.
+- Thay đổi chỉ gồm SQL draft và tài liệu migration/decision/plan/task log. Không sửa Flutter/Express/API/schema legacy, không đọc/sửa `.env`/`server/.env`, không backup/restore, không commit/push.

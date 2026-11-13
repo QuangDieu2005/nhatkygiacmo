@@ -1,6 +1,6 @@
-# Supabase Migration Plan — Dream Diary (Đợt 8E.3)
+# Supabase Migration Plan — Dream Diary (Đợt 8E.4)
 
-**Trạng thái:** thiết kế migration để review; chưa có migration SQL executable và chưa thay đổi Supabase. Inventory live được chủ dự án cung cấp sau khi chạy bộ inventory thủ công. Thông tin dưới đây là kết quả kiểm kê được cung cấp; agent không tự kết nối/chạy lại SQL trong Đợt 8E.3.
+**Trạng thái:** có SQL draft `supabase/migrations/DRAFT_ONLY_create_api_v2_tables.sql` để review; không phải migration được phê duyệt và chưa chạy. Inventory live được chủ dự án cung cấp sau khi chạy bộ inventory thủ công. Không kết nối hoặc chạy lại SQL trong Đợt 8E.4.
 
 **Ưu tiên:** bảo toàn dữ liệu legacy, duy trì đường phục hồi. Không drop, truncate, rename hoặc ghi đè bảng/cột cũ trong migration đầu tiên.
 
@@ -180,3 +180,22 @@ Trước khi migration/backfill tiếp tục, reconcile:
 ## 10. Phạm vi Đợt 8E.3
 
 Chỉ cập nhật tài liệu dựa trên inventory được cung cấp và source/contract đã review. Không đọc/sửa `.env` hoặc `server/.env`; không kết nối/chạy SQL/backup/restore/migration; không sửa Flutter, Express, API, schema, policies, grants hoặc dữ liệu; không commit/push. Inventory live được ghi nhận là snapshot; không chạy lại trong đợt này.
+
+## 11. Đợt 8E.4 — SQL draft cho target tables (chưa thực thi)
+
+File `supabase/migrations/DRAFT_ONLY_create_api_v2_tables.sql` là DDL dự thảo tạo mới `public.dreams_v2` và `public.sleep_records_v2`. Tên file cố ý không theo dạng version timestamp; vẫn phải coi là DDL có thể thực thi và không chạy trước review/phê duyệt riêng. File không đụng vào legacy tables, không backfill, không tạo mapping table và không chứa DROP/TRUNCATE/RENAME.
+
+| Target | Cột và quy tắc chính |
+|---|---|
+| `dreams_v2` | UUID PK `id` với `gen_random_uuid()`; FK `user_id` tới `auth.users(id) ON DELETE CASCADE`; title/content/emotion text; tags `text[]` default mảng rỗng; clarity integer default 3, giới hạn 1–5; lucid boolean default false; dream_date DATE; created_at timestamptz default now(). Có checks độ dài title/content, emotion theo validator Express và tags không chứa NULL element. |
+| `sleep_records_v2` | UUID PK; FK owner cascade; start/end timestamptz; duration integer NOT NULL do Express ghi; quality integer 0–100; ba stage minutes integer default 0, không âm; notes text NOT NULL default rỗng; created_at timestamptz default now(). Checks end sau start, không quá 24 giờ, duration bằng floor(elapsed/60s), duration 0–1440. |
+
+Hai bảng bật RLS (không FORCE) và mỗi bảng có SELECT/INSERT/UPDATE/DELETE policy cho `authenticated`, luôn so sánh `user_id = auth.uid()`; UPDATE kiểm tra cả USING và WITH CHECK. Do kiến trúc CRUD qua Express, draft revoke quyền bảng từ PUBLIC/anon/authenticated và chỉ grant SELECT/INSERT/UPDATE/DELETE cho `service_role`. Service-role bypass RLS; Express vẫn phải lấy `user_id` từ JWT đã xác minh và giới hạn mọi truy vấn theo owner. Không có sequence grants vì IDs là UUID. PK index tự sinh; thêm index owner+created cho list ordering, owner+dream_date, GIN tags và owner+start_time cho filter; không có index legacy nào bị thay đổi.
+
+Validation được đối chiếu với `server/src/validation.js`: emotion enum, clarity 1–5, sleep quality 0–100, stages không âm, timestamp timezone-aware được Express chuẩn hóa, duration do Express tính. DB duration check bảo vệ tính nhất quán nhưng không thay validation/API. DB check độ dài không thể thay thế đầy đủ `trim()` của JavaScript; server vẫn là nguồn validation. Chưa áp đặt quan hệ tổng các sleep stages với duration vì API không yêu cầu.
+
+**Compatibility blocker:** Express routes hiện vẫn gọi `dreams`/`sleep_records`, không gọi `*_v2`. Không có route nào tự chuyển sang các bảng mới do draft này. Trước expose cần backend rollout riêng, kiểm thử ownership với `adminClient`/service_role, cập nhật account-data deletion (hiện chỉ xóa legacy và không atomic), và xác minh API filters/response. Chưa xác định có cần bật direct authenticated GRANT trong tương lai; theo kiến trúc hiện tại không cấp quyền direct client.
+
+**Còn cần review/phê duyệt:** tên bảng; việc giữ chính xác các DB defaults; emotion CHECK vocabulary; grants service_role; index set; RLS behavior khi gọi service_role; staging run; preflight counts (snapshot 0/0 phải recheck); backup/restore rehearsal; migration version/environment/owner; API cutover/account deletion/rollback. Không có mapping/backfill trong draft, nên unresolved legacy tags/date/timezone/quality/stages không được tự chuyển đổi.
+
+Kiểm tra trong Đợt 8E.4 chỉ là review tĩnh SQL và đối chiếu validator/routes/contract; không xác nhận SQL đã được PostgreSQL chạy, không kết nối Supabase và không thực hiện bất kỳ DDL/DML nào.
