@@ -292,3 +292,11 @@
 - Thay `.env.example` gốc bằng ghi chú Flutter không load dotenv/CRUD Supabase trực tiếp; cấu hình Supabase thuộc server example. Chỉ kiểm tra tên biến, không ghi lại URL/key.
 - Đối chiếu source: backend yêu cầu ba biến Supabase trên; trong Flutter không có tham chiếu dotenv, Supabase initialization hoặc CRUD trực tiếp. `supabase_flutter` vẫn còn trong dependency lock/manifest nhưng không thấy được gọi từ `lib/`.
 - Không mở/sửa `.env` hoặc `server/.env`; không sửa source/dependency/API/SQL/database, không kết nối/migration, không commit/push.
+## 2026-11-13 - Đợt 8C: Xác minh kết nối Express tới Supabase
+
+- Đã rà soát `server/src/supabase.js`, `server/src/server.js`, health route, `server/src/middleware.js`, `server/package.json` và các query Supabase liên quan. Server tạo Auth client dùng anon key để xác minh token và admin client dùng service-role cho DB; health `GET /api/health` chạy `SELECT id FROM dreams LIMIT 1`, không ghi dữ liệu. Server startup log không in giá trị cấu hình.
+- `git check-ignore -- server/.env`: PASS. File `server/.env` tồn tại: PASS. Kiểm tra cấu hình bằng script chỉ xuất trạng thái: ba tên biến bắt buộc hiện diện/không rỗng, PASS (3/3); không in giá trị.
+- `npm test` trong `server/`: PASS, 10 passed / 0 failed. Test output có dòng logger `[API error] Error` từ test lỗi tổng quát; không chứa thông tin cấu hình.
+- Server khởi động: PASS (`npm start`, cổng lấy từ cấu hình runtime). Supabase clients khởi tạo: PASS (server import thành công). Health check: HTTP 200, `status=ok`, `database=connected`; do health query hoàn tất thành công, kết nối database thực sự được xác minh bằng thao tác SELECT read-only giới hạn một row, không trả dữ liệu row về terminal.
+- Tiến trình server do lượt này khởi chạy đã được dừng sau phép thử. Không có migration/SQL ghi, thay đổi schema/dữ liệu hoặc kết nối client Flutter.
+- File cập nhật: chỉ `docs/TASK_LOG.md`. Đã kiểm tra ignore trước khi chạy; không mở/sửa `.env` hoặc `server/.env`, không in/ghi URL hay key, không commit/push. `git diff --check` được chạy sau entry này.
