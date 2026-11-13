@@ -45,7 +45,8 @@ Không bắt đầu migration executable trước khi có inventory, quyết đ�
 - AuthService/AuthProvider đã tích hợp source với response `user + session`, đăng ký pending email confirmation, secure token storage, login/register/refresh-on-restore/logout; ApiClient gắn Bearer cho request protected và giữ AuthRouteGuard/deep-link.
 - Còn lại: refresh/replay single-flight cho 401 phát sinh trong phiên đang chạy; xác định rõ behavior restore khi không có mạng; test end-to-end với user Supabase/Express trong môi trường kiểm soát. Forgot/reset email vẫn cần backend endpoint riêng.
 
-## C?p nh?t sau ??t 8D.2 ? 2026-11-13
+## Update after Sprint 8D.2 (2026-11-13)
 
-- ?? ho?n th?nh auto-refresh khi protected request nh?n 401, gi?i h?n m?t l?n retry, single-flight v? x? l? request 401 ??n mu?n b?ng access token v?a xoay. Refresh th?t b?i x?a phi?n c?c b? v? AuthProvider k?ch ho?t route guard v? Login.
-- C?n c?n ki?m ch?ng integration v?i Express/Supabase trong m?i tr??ng ki?m so?t; kh?ng thu?c ??t n?y. Dream/Sleep CRUD v?n n?m ? giai ?o?n sau.
+- Auto-refresh on protected-request 401, one retry, concurrent single-flight, delayed-401 reuse of the rotated token, local session clearing, and AuthProvider route refresh are implemented and covered by fake-based tests.
+- The configured Supabase project responds to read-only checks, but its current Dream/Sleep columns do not match the API contract. The next data-integration gate is a reviewed schema/migration plan and approved handling of legacy data; do not enable CRUD against the incompatible schema.
+- End-to-end Auth/CRUD verification with the real Express/Supabase environment remains outstanding.

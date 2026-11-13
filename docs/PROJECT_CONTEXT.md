@@ -57,8 +57,14 @@ Giai đoạn 2 tạo `DATA_CONTRACT.md`, `API_SPECIFICATION.md`, `DATABASE_MIGRA
 - Forgot/reset email vẫn chưa hỗ trợ. Refresh hiện chạy khi khôi phục phiên lúc app mở và có thể retry thủ công sau lỗi mạng; chưa có auto-refresh/replay cho 401 phát sinh giữa phiên.
 - Dream/Sleep CRUD Flutter vẫn fixtures/stub. Không dùng Supabase Flutter cho auth hoặc CRUD; không xác minh end-to-end với user thật trong Đợt 8D.1.
 
-## C?p nh?t sau ??t 8D.2 ? 2026-11-13
+## Update after Sprint 8D.2 (2026-11-13)
 
-- ApiClient refresh access token khi request c?n Bearer nh?n 401; login/register/refresh b? lo?i kh?i lu?ng interceptor. Request g?c ???c replay t?i ?a m?t l?n v?i method, URL, query, body v? c?u h?nh c?n l?i ???c gi? t? RequestOptions.
-- AuthService d?ng single-flight refresh. N?u m?t 401 ??n sau khi token ?? ???c xoay, request ???c retry tr?c ti?p b?ng access token m?i nh?t thay v? t?o refresh th? hai. Refresh l?i s? x?a phi?n c?c b? trong secure storage, th?ng b?o AuthProvider unauthenticated v? k?ch ho?t route guard. L?i refresh kh?ng treo request.
-- C?c test d?ng fake Dio adapter, Auth API v? token storage; kh?ng d?ng t?i kho?n th?t. Dream/Sleep CRUD v?n ch?a t?ch h?p.
+- ApiClient refreshes an access token for protected requests receiving HTTP 401; login/register/refresh are excluded. The original request is replayed at most once with its method, URL, query, body, and Dio configuration preserved.
+- AuthService uses single-flight refresh. A delayed 401 uses the latest rotated token rather than starting a second refresh. Any refresh failure clears the local secure session, marks AuthProvider unauthenticated, and notifies the route guard.
+- Tests use a fake Dio adapter, fake Auth API, and fake token storage. Dream/Sleep CRUD is not yet integrated.
+
+## Supabase connection status (2026-11-13)
+
+- Express uses Supabase Auth and its server-side database client. A read-only schema probe against the configured project confirmed that Dream/Sleep CRUD repositories in Flutter still use local fixture data.
+- The live `dreams` table is missing `clarity_score`, `is_lucid`, and `dream_date`. The live `sleep_records` table is missing `start_time`, `end_time`, `quality_score`, all three sleep-stage minute fields, and `notes`. Existing routes query these contract fields, so Dream/Sleep CRUD cannot be enabled safely until schema compatibility is resolved.
+- No rows were fetched and no database changes were made. Migration remains gated on approved mapping decisions, backup/restore rehearsal, and explicit approval.

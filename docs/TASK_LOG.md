@@ -311,12 +311,16 @@
 - `flutter analyze --no-pub`: hoàn tất, exit 1 vì diagnostics informational; chính xác **106 info, 0 warning, 0 error**. Không tuyên bố analyzer sạch.
 - Giới hạn: test dùng fake Auth API/token storage; không có request tới Supabase hoặc tài khoản thật. Startup restore xác minh phiên bằng refresh; lỗi mạng giữ refresh credential nhưng chưa authenticated cho đến khi retry thành công. Forgot/reset email chưa hỗ trợ. Không chạy migration, không ghi database, không sửa API backend/SQL, không đọc/sửa `.env` hoặc `server/.env`, không commit/push.
 
-## ??t 8D.2 ? T? ??ng refresh token khi API tr? 401 (2026-11-13)
+## Sprint 8D.2 - Auto-refresh access token on API 401 (2026-11-13)
 
-- ApiClient ch? auto-refresh cho protected request tr? 401; login/register/refresh kh?ng v?o interceptor refresh. Request g?c ???c replay t?i ?a m?t l?n v? gi? method, URL, query parameters, body c?ng c?u h?nh Dio. Request retry 401 ???c tr? v?, kh?ng refresh v? h?n.
-- AuthService gom refresh ??ng th?i b?ng m?t Future d?ng chung. Ki?m th? ??ng th?i ph?t hi?n race khi 401 th? hai t?i sau khi refresh ??u ?? xong; s?a b?ng c?ch so s?nh bearer c?a request v?i access token hi?n t?i, r?i d?ng token m?i ?? retry request c? m? kh?ng refresh l?n n?a.
-- Refresh l?i (bao g?m l?i m?ng) x?a access/refresh token kh?i secure storage, ??t AuthProvider v? unauthenticated v? notify GoRouter. Request ?ang ch? k?t th?c b?ng l?i ban ??u, kh?ng b? treo. Logout lu?n d?n phi?n c?c b? n?u API logout l?i.
-- Test AuthService/ApiClient: 19/19 PASS; Auth route guard/UI ch?y ri?ng: 25/25 PASS; full `flutter test --reporter expanded`: 88/88 PASS. Bao g?m token Bearer, refresh/retry, retry 401, endpoint public, concurrent 401, thi?u refresh token, l?i m?ng v? logout l?i.
-- Dart format check tr?n 12 file Dart thay ??i: PASS, 0 file c?n format. `git diff --check`: PASS (ki?m tra sau c?p nh?t t?i li?u).
-- `flutter analyze --no-pub`: ho?n t?t, exit 1 do 105 info, 0 warning, 0 error; kh?ng tuy?n b? analyzer s?ch.
-- C?c test ch? d?ng fake adapter/API/token storage; ch?a ki?m ch?ng end-to-end v?i Express/Supabase th?t. Kh?ng ??c/s?a `.env` hay `server/.env`; kh?ng s?a backend, schema ho?c database; kh?ng commit/push.
+- ApiClient auto-refreshes only protected requests receiving 401; login/register/refresh are excluded. The original request is replayed at most once with method, URL, query, body, and Dio configuration preserved.
+- AuthService shares concurrent refresh work. Tests exposed a delayed-401 race after the first refresh completed; the interceptor now retries that request using the latest access token instead of refreshing again.
+- Any refresh failure, including a network failure, clears secure local tokens, sets AuthProvider to unauthenticated, and notifies GoRouter. Waiting requests finish safely with the original error.
+- AuthService/ApiClient tests: 19/19 passed. Auth route guard/UI tests: 25/25 passed. Full `flutter test --reporter expanded`: 88/88 passed. Dart format check: PASS, 0 files changed. Analyzer: 105 infos, 0 warnings, 0 errors (exit 1 due to infos). `git diff --check`: PASS before this documentation update.
+- No live account was used by tests; no backend/schema/database changes, env file access, commit, or push occurred.
+
+## Supabase connection investigation (2026-11-13)
+
+- Read-only REST schema probes completed against the configured Supabase project using `SELECT` with `limit(0)`; no user rows were fetched. `dreams` supports `id`, `user_id`, `title`, `content`, `emotion`, `tags`, and `created_at`, but lacks `clarity_score`, `is_lucid`, and `dream_date`. `sleep_records` supports `id`, `user_id`, and `duration_minutes`, but lacks `start_time`, `end_time`, `quality_score`, `deep_sleep_minutes`, `light_sleep_minutes`, `rem_sleep_minutes`, and `notes`.
+- Flutter Dream/Sleep repositories remain fixture/local implementations. Existing Express CRUD routes expect the missing contract fields; CRUD must not be exposed until a schema-compatible migration/decision is reviewed.
+- No migration or write query was executed. Do not read `.env` or `server/.env`; runtime loaded configured credentials without printing them.
