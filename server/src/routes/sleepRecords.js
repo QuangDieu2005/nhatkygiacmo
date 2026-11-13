@@ -24,7 +24,7 @@ export function createSleepRecordsRouter(database) {
         throw new ApiError(400, 'VALIDATION_ERROR', 'Khoảng ngày lọc không hợp lệ.');
       }
 
-      let query = database.from('sleep_records').select('*').eq('user_id', req.user.id);
+      let query = database.from('sleep_records_v2').select('*').eq('user_id', req.user.id);
       if (from || to) {
         if (from) query = query.gte('start_time', `${from}T00:00:00.000Z`);
         if (to) query = query.lte('start_time', `${to}T23:59:59.999Z`);
@@ -49,7 +49,7 @@ export function createSleepRecordsRouter(database) {
     try {
       const payload = buildSleepPayload(req.body, req.user.id);
       const { data, error } = await database
-        .from('sleep_records')
+        .from('sleep_records_v2')
         .insert(payload)
         .select('*')
         .single();
@@ -65,7 +65,7 @@ export function createSleepRecordsRouter(database) {
       const id = requireUuid(req.params.id);
       const payload = buildSleepPayload(req.body, req.user.id);
       const { data, error } = await database
-        .from('sleep_records')
+        .from('sleep_records_v2')
         .update(payload)
         .eq('id', id)
         .eq('user_id', req.user.id)
@@ -85,7 +85,7 @@ export function createSleepRecordsRouter(database) {
     try {
       const id = requireUuid(req.params.id);
       const { data, error } = await database
-        .from('sleep_records')
+        .from('sleep_records_v2')
         .delete()
         .eq('id', id)
         .eq('user_id', req.user.id)

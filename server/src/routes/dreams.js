@@ -19,7 +19,7 @@ export function createDreamsRouter(database) {
 
   router.get('/', async (req, res, next) => {
     try {
-      let query = database.from('dreams').select('*').eq('user_id', req.user.id);
+      let query = database.from('dreams_v2').select('*').eq('user_id', req.user.id);
 
       if (req.query.emotion !== undefined) {
         const emotion = requireQueryString(req.query.emotion, 'emotion');
@@ -61,7 +61,7 @@ export function createDreamsRouter(database) {
     try {
       const payload = buildDreamPayload(req.body, req.user.id);
       const { data, error } = await database
-        .from('dreams')
+        .from('dreams_v2')
         .insert(payload)
         .select('*')
         .single();
@@ -77,7 +77,7 @@ export function createDreamsRouter(database) {
       const id = requireUuid(req.params.id);
       const payload = buildDreamPayload(req.body, req.user.id);
       const { data, error } = await database
-        .from('dreams')
+        .from('dreams_v2')
         .update(payload)
         .eq('id', id)
         .eq('user_id', req.user.id)
@@ -97,7 +97,7 @@ export function createDreamsRouter(database) {
     try {
       const id = requireUuid(req.params.id);
       const { data, error } = await database
-        .from('dreams')
+        .from('dreams_v2')
         .delete()
         .eq('id', id)
         .eq('user_id', req.user.id)

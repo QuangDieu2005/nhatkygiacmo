@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { apiErrorHandler } from './errorHandler.js';
+import { createHealthHandler } from './health.js';
 import { adminClient } from './supabase.js';
 import { requireAuth } from './middleware.js';
 import authRouter from './routes/auth.js';
@@ -19,29 +20,17 @@ app.use(cors({ origin: origins.includes('*') ? '*' : origins }));
 app.use(express.json({ limit: '1mb' }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: 'draft-8', legacyHeaders: false }));
 
-app.get('/api/health', async (_req, res) => {
-  const { error } = await adminClient.from('dreams').select('id').limit(1);
-  if (error) return res.status(503).json({
-    status: 'degraded',
-    database: 'unavailable',
-    message: 'Dịch vụ cơ sở dữ liệu tạm thời không khả dụng.',
-    code: 'DEPENDENCY_UNAVAILABLE',
-  });
-  res.json({ status: 'ok', service: 'dream-diary-api', database: 'connected' });
-});
+app.get('/api/health', createHealthHandler(adminClient));
 
 app.use('/api/auth', authRouter);
 app.use('/api/dreams', requireAuth, createDreamsRouter(adminClient));
 app.use('/api/sleep-records', requireAuth, createSleepRecordsRouter(adminClient));
-app.delete('/api/account/data', requireAuth, async (req, res, next) => {
-  try {
-    const userId = req.user.id;
-    const dreams = await adminClient.from('dreams').delete().eq('user_id', userId);
-    if (dreams.error) throw dreams.error;
-    const sleeps = await adminClient.from('sleep_records').delete().eq('user_id', userId);
-    if (sleeps.error) throw sleeps.error;
-    res.json({ success: true, message: 'Đã xóa dữ liệu nhật ký và giấc ngủ của tài khoản.' });
-  } catch (error) { next(error); }
+app.delete('/api/account/data', requireAuth, async (_req, res) => {
+  // Disabled until an atomic, reviewed operation covers both legacy and v2 tables.
+  res.status(501).json({
+    message: 'Chức năng xóa dữ liệu tài khoản tạm thời chưa khả dụng.',
+    code: 'NOT_SUPPORTED',
+  });
 });
 
 app.use((_req, res) => res.status(404).json({

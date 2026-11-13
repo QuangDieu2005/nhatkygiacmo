@@ -72,3 +72,10 @@ Không bắt đầu migration executable trước khi có inventory, quyết đ�
 
 - Có SQL DDL draft-only tạo `dreams_v2`/`sleep_records_v2`, owner RLS policies, least-privilege server grants và indexes theo API query patterns. Draft chưa chạy, chưa được phê duyệt, không backfill và không thay legacy tables.
 - Bước tiếp theo là review DDL/defaults/constraints/grants trên giấy; sau đó phê duyệt riêng staging rehearsal và backup/restore. Không chuyển Express CRUD sang target trước khi xử lý account-data deletion, ownership tests, route compatibility, rollback và phê duyệt cutover.
+
+## Cập nhật sau Đợt 8F
+
+- Express Dream CRUD now targets `dreams_v2`; Sleep CRUD targets `sleep_records_v2`. Owner is derived from verified JWT and every list/update/delete query remains scoped by `user_id`; create payloads assign that owner server-side.
+- `/api/health` probes `dreams_v2`; it reports database unavailable (503) until the target table exists or if the query fails. This source change does not apply the migration.
+- `DELETE /api/account/data` is disabled with 501 until a reviewed atomic operation covers both legacy and v2 data. Implement a transaction/RPC separately; do not report partial deletion as success.
+- CRUD tests use fake database clients only. Production readiness remains blocked on reviewed/approved migration execution, staging and real environment verification, plus account-data deletion design.

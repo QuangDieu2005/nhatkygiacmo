@@ -3,6 +3,7 @@ import test from 'node:test';
 import { createDreamsRouter } from '../src/routes/dreams.js';
 import { createSleepRecordsRouter } from '../src/routes/sleepRecords.js';
 import { apiErrorHandler } from '../src/errorHandler.js';
+import { createHealthHandler } from '../src/health.js';
 import {
   buildDreamPayload,
   buildSleepPayload,
@@ -47,6 +48,7 @@ test('dream list uses array containment, searches only text fields, and scopes o
   });
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, []);
+  assert.equal(database.calls.at(-1).table, 'dreams_v2');
 
   const call = database.calls.at(-1);
   assert.ok(call.filters.some(([field, value]) => field === 'user_id' && value === USER_ID));
@@ -71,6 +73,7 @@ test('Dream create rejects client metadata and returns a full object with JWT ow
 
   const response = await invoke(router, 'post', '/', {body: dreamBody()});
   assert.equal(response.statusCode, 201);
+  assert.equal(database.calls.at(-1).table, 'dreams_v2');
   assert.equal(response.body.user_id, USER_ID);
   const saved = database.calls.at(-1).payload;
   assert.deepEqual(saved.tags, ['moon', 'night']);
@@ -89,12 +92,30 @@ test('Dream mutations validate UUID and filter writes by JWT owner', async () =>
     params: {id: DREAM_ID}, body: dreamBody(),
   });
   assert.equal(updated.statusCode, 200);
+  assert.equal(database.calls.at(-1).table, 'dreams_v2');
   assert.ok(database.calls.at(-1).filters.some(([key, value]) => key === 'id' && value === DREAM_ID));
   assert.ok(database.calls.at(-1).filters.some(([key, value]) => key === 'user_id' && value === USER_ID));
 
   const removed = await invoke(router, 'delete', '/:id', {params: {id: DREAM_ID}});
   assert.equal(removed.statusCode, 204);
+  assert.equal(database.calls.at(-1).table, 'dreams_v2');
   assert.ok(database.calls.at(-1).filters.some(([key, value]) => key === 'user_id' && value === USER_ID));
+});
+
+test('Dream update/delete return not found when owner-scoped queries match no row', async () => {
+  const database = new FakeDatabase(null, true);
+  const router = createDreamsRouter(database);
+  const updated = await invoke(router, 'patch', '/:id', {
+    params: {id: DREAM_ID}, body: dreamBody(),
+  });
+  assert.equal(updated.statusCode, 404);
+  assert.equal(database.calls.at(-1).table, 'dreams_v2');
+  assert.ok(database.calls.at(-1).filters.some(([field, value]) => field === 'user_id' && value === USER_ID));
+
+  const removed = await invoke(router, 'delete', '/:id', {params: {id: DREAM_ID}});
+  assert.equal(removed.statusCode, 404);
+  assert.equal(database.calls.at(-1).table, 'dreams_v2');
+  assert.ok(database.calls.at(-1).filters.some(([field, value]) => field === 'user_id' && value === USER_ID));
 });
 
 test('sleep payload validates zoned timestamps and computes duration server-side', () => {
@@ -135,6 +156,7 @@ test('Sleep create normalizes timestamps, calculates duration, and scopes owner'
     },
   });
   assert.equal(response.statusCode, 201);
+  assert.equal(database.calls.at(-1).table, 'sleep_records_v2');
   const saved = database.calls.at(-1).payload;
   assert.equal(saved.duration_minutes, 480);
   assert.equal(saved.start_time, '2025-03-10T15:00:00.000Z');
@@ -154,10 +176,28 @@ test('Sleep routes validate UUIDs and owner-scope update/delete', async () => {
     params: {id: DREAM_ID}, body: sleepBody(),
   });
   assert.equal(updated.statusCode, 200);
+  assert.equal(database.calls.at(-1).table, 'sleep_records_v2');
   assert.ok(database.calls.at(-1).filters.some(([field, value]) => field === 'user_id' && value === USER_ID));
 
   const removed = await invoke(router, 'delete', '/:id', {params: {id: DREAM_ID}});
   assert.equal(removed.statusCode, 204);
+  assert.equal(database.calls.at(-1).table, 'sleep_records_v2');
+  assert.ok(database.calls.at(-1).filters.some(([field, value]) => field === 'user_id' && value === USER_ID));
+});
+
+test('Sleep update/delete return not found when owner-scoped queries match no row', async () => {
+  const database = new FakeDatabase(null, true);
+  const router = createSleepRecordsRouter(database);
+  const updated = await invoke(router, 'patch', '/:id', {
+    params: {id: DREAM_ID}, body: sleepBody(),
+  });
+  assert.equal(updated.statusCode, 404);
+  assert.equal(database.calls.at(-1).table, 'sleep_records_v2');
+  assert.ok(database.calls.at(-1).filters.some(([field, value]) => field === 'user_id' && value === USER_ID));
+
+  const removed = await invoke(router, 'delete', '/:id', {params: {id: DREAM_ID}});
+  assert.equal(removed.statusCode, 404);
+  assert.equal(database.calls.at(-1).table, 'sleep_records_v2');
   assert.ok(database.calls.at(-1).filters.some(([field, value]) => field === 'user_id' && value === USER_ID));
 });
 
@@ -166,6 +206,7 @@ test('sleep GET returns a direct array with a JWT owner filter', async () => {
   const router = createSleepRecordsRouter(database);
   const response = await invoke(router, 'get', '/', {query: {days: '7'}});
   assert.equal(response.statusCode, 200);
+  assert.equal(database.calls.at(-1).table, 'sleep_records_v2');
   assert.deepEqual(response.body, []);
   assert.ok(database.calls.at(-1).filters.some(([field, value]) => field === 'user_id' && value === USER_ID));
 });
@@ -176,6 +217,38 @@ test('unexpected database errors are returned as a generic error DTO', () => {
   assert.equal(response.statusCode, 500);
   assert.equal(response.body.code, 'INTERNAL_ERROR');
   assert.doesNotMatch(response.body.message, /private database detail/);
+});
+
+test('dream and sleep database failures do not expose internal error details', async () => {
+  for (const [routerFactory, method, path, overrides] of [
+    [createDreamsRouter, 'get', '/', {}],
+    [createSleepRecordsRouter, 'get', '/', {}],
+  ]) {
+    const database = new FakeDatabase({message: 'private database detail'});
+    const response = await invoke(routerFactory(database), method, path, overrides);
+    assert.equal(response.statusCode, 500);
+    assert.equal(response.body.code, 'INTERNAL_ERROR');
+    assert.doesNotMatch(response.body.message, /private database detail/);
+  }
+});
+
+test('health checks dreams_v2 and reports database errors as unavailable', async () => {
+  const database = new FakeDatabase({message: 'private database detail'});
+  const response = fakeResponse();
+  await createHealthHandler(database)({}, response);
+  assert.equal(database.calls[0].table, 'dreams_v2');
+  assert.equal(response.statusCode, 503);
+  assert.equal(response.body.code, 'DEPENDENCY_UNAVAILABLE');
+  assert.doesNotMatch(JSON.stringify(response.body), /private database detail/);
+});
+
+test('health reports connected when the v2 table query succeeds', async () => {
+  const database = new FakeDatabase();
+  const response = fakeResponse();
+  await createHealthHandler(database)({}, response);
+  assert.equal(database.calls[0].table, 'dreams_v2');
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.database, 'connected');
 });
 
 async function invoke(router, method, path, overrides = {}) {
@@ -234,8 +307,22 @@ function sleepBody() {
 class FakeDatabase {
   calls = [];
 
+  constructor(error = null, noMatchingRows = false) {
+    this.error = error;
+    this.noMatchingRows = noMatchingRows;
+  }
+
   from(table) {
-    const call = {table, filters: [], contains: [], payload: null, operation: 'select', or: null};
+    const call = {
+      table,
+      filters: [],
+      contains: [],
+      payload: null,
+      operation: 'select',
+      or: null,
+      error: this.error,
+      noMatchingRows: this.noMatchingRows,
+    };
     this.calls.push(call);
     return new FakeQuery(call);
   }
@@ -253,10 +340,12 @@ class FakeQuery {
   insert(payload) { this.call.operation = 'insert'; this.call.payload = payload; return this; }
   update(payload) { this.call.operation = 'update'; this.call.payload = payload; return this; }
   delete() { this.call.operation = 'delete'; return this; }
-  async single() { return {data: this.row(), error: null}; }
+  async single() { return {data: this.row(), error: this.call.error}; }
   async maybeSingle() {
-    return {data: this.call.operation === 'delete' ? {id: DREAM_ID} : this.row(), error: null};
+    if (this.call.noMatchingRows) return {data: null, error: this.call.error};
+    return {data: this.call.operation === 'delete' ? {id: DREAM_ID} : this.row(), error: this.call.error};
   }
-  then(resolve, reject) { return Promise.resolve({data: [], error: null}).then(resolve, reject); }
+  then(resolve, reject) { return Promise.resolve({data: [], error: this.call.error}).then(resolve, reject); }
+  limit() { return this; }
   row() { return {...this.call.payload, id: DREAM_ID, created_at: CREATED_AT}; }
 }

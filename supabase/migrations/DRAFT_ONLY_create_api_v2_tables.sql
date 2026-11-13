@@ -32,7 +32,7 @@ CREATE TABLE public.sleep_records_v2 (
   end_time timestamptz NOT NULL,
   -- Written by Express after validating start_time/end_time; never accepted from client.
   duration_minutes integer NOT NULL,
-  quality_score integer NOT NULL,
+  quality_score integer NOT NULL DEFAULT 75,
   deep_sleep_minutes integer NOT NULL DEFAULT 0,
   light_sleep_minutes integer NOT NULL DEFAULT 0,
   rem_sleep_minutes integer NOT NULL DEFAULT 0,

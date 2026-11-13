@@ -58,7 +58,7 @@ Response DTO gồm `id`, `user_id`, tất cả writable fields và `created_at`.
 | Method + URL | Thành công | Auth | Lỗi |
 |---|---|---|---|
 | GET `/health` (đường dẫn đầy đủ `/api/health`) | `200 {status:"ok", service:"dream-diary-api", database:"connected"}` | Không | `503 {status:"degraded", database:"unavailable", code:"DEPENDENCY_UNAVAILABLE"}` |
-| DELETE `/account/data` (đường dẫn đầy đủ `/api/account/data`) | Xóa dreams/sleep rows thuộc user hiện tại | Có | 401, lỗi chung; endpoint hiện không atomic và chưa được Flutter dùng |
+| DELETE `/account/data` (đường dẫn đầy đủ `/api/account/data`) | Hiện trả `501 {message, code:"NOT_SUPPORTED"}`; xóa tài khoản đang bị khóa cho tới khi có thao tác atomic được review bao phủ cả legacy và v2 | Có | 401, 501 |
 
 ## Ghi chú tương thích source và database
 

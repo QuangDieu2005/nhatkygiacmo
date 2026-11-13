@@ -363,3 +363,14 @@
 - Thêm PK tự sinh và indexes theo list/filter API: user+created, user+dream_date, GIN tags, user+start_time. API routes hiện vẫn gọi legacy table names; draft không bật CRUD và account deletion chưa bao gồm target.
 - Static review: kiểm tra cột/types/defaults/checks/FK/policies/grants/indexes và không có DROP/TRUNCATE/legacy ALTER, backfill/DML. `git diff --check`: chạy sau cập nhật; không chạy SQL, không kết nối Supabase, không chạy migration.
 - Thay đổi chỉ gồm SQL draft và tài liệu migration/decision/plan/task log. Không sửa Flutter/Express/API/schema legacy, không đọc/sửa `.env`/`server/.env`, không backup/restore, không commit/push.
+
+## Đợt 8F — Chuyển Express CRUD sang Supabase API v2
+
+- Chuyển Dreams GET/POST/PATCH/DELETE sang `dreams_v2` và Sleep GET/POST/PATCH/DELETE sang `sleep_records_v2`. GET, PATCH và DELETE giữ `user_id = req.user.id`; POST tiếp tục build payload với owner từ JWT đã xác minh. Duration vẫn do Express tính, body không thể gửi `user_id`, `id`, `created_at` hoặc `duration_minutes`.
+- Health check nay query `dreams_v2`; lỗi query/exception trả 503 `DEPENDENCY_UNAVAILABLE` không lộ chi tiết. Nếu migration chưa được áp dụng, health sẽ báo database unavailable.
+- Tắt an toàn `DELETE /api/account/data` bằng 501 `NOT_SUPPORTED`; không còn hai lệnh delete tuần tự rồi báo thành công. Cần thiết kế/review transaction/RPC bao phủ legacy và v2 trước khi bật lại.
+- Cập nhật SQL draft quality_score thành `NOT NULL DEFAULT 75`, vẫn DRAFT ONLY / NOT EXECUTED.
+- Bổ sung fake-client tests cho table names, owner filters, payload owner, not-found cho mutations không khớp owner, sanitized database errors và health success/failure. `npm test` trong `server/`: PASS, 15 passed / 0 failed.
+- `git diff --check`: PASS, exit 0 sau khi cập nhật toàn bộ file. Không chạy Flutter tests vì Flutter không thuộc phạm vi thay đổi.
+- File đã đổi: Dream/Sleep routes, `server.js`, test API contract, SQL draft, `health.js`, `API_SPECIFICATION.md`, `DEVELOPMENT_PLAN.md`, `PROJECT_CONTEXT.md`, `TASK_LOG.md`.
+- Không đọc/sửa `.env` hoặc `server/.env`; không kết nối Supabase, không chạy SQL/migration, không ghi database, không sửa Flutter, không commit/push.

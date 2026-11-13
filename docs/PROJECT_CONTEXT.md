@@ -89,3 +89,10 @@ Giai đoạn 2 tạo `DATA_CONTRACT.md`, `API_SPECIFICATION.md`, `DATABASE_MIGRA
 - Đề xuất review là tạo bảng contract mới song song, giữ legacy tables nguyên vẹn; chưa được phê duyệt triển khai. Tags/date/timezone/quality/stages chưa được map.
 - Backend `DELETE /api/account/data` hiện chỉ xóa hai legacy tables qua hai request không atomic; phải xử lý target tables và recovery/atomicity trong rollout backend trước khi expose CRUD.
 - Không chạy lại SQL hoặc sửa Supabase trong Đợt 8E.3; Flutter Dream/Sleep CRUD vẫn mock/local.
+
+## Cập nhật sau Đợt 8F
+
+- Express Dream routes now query `public.dreams_v2`; Sleep routes query `public.sleep_records_v2`. All operations retain ownership from the verified JWT; inserts set `user_id` server-side and mutations filter by both record ID and owner.
+- Health check probes `dreams_v2`, so it returns 503 if the target migration has not been applied or the database query fails. No live Supabase check was performed for this source change.
+- Account-data deletion is intentionally disabled with 501. Existing sequential table deletes are not atomic and did not cover v2; a separately reviewed transactional database operation/RPC must cover legacy and v2 before re-enabling.
+- Migration remains DRAFT ONLY / NOT EXECUTED. Flutter was not changed; Express CRUD behavior has only fake-client test coverage in this task.
