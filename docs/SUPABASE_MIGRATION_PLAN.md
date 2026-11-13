@@ -124,3 +124,10 @@ Chỉ chuyển thành migration executable sau khi tất cả mục phù hợp �
 - Không đọc `.env`/`server/.env`, không chạy SQL, không lấy row data, không tạo migration executable, không thay schema/policy/dữ liệu, không sửa Flutter/Express/API và không commit/push.
 - Dream/Sleep CRUD chưa được bật trong Flutter; các API routes phụ thuộc schema contract mới.
 - Các quyết định và tác động được theo dõi riêng tại `docs/8E_MIGRATION_DECISIONS.md`.
+
+## 10. Inventory thủ công đang chờ — Đợt 8E.2
+
+- Bộ truy vấn metadata/aggregate chỉ đọc được tạo tại `docs/8E_READ_ONLY_INVENTORY.sql`; cách chạy và chia sẻ output ở `docs/8E2_INVENTORY_GUIDE.md`.
+- Các truy vấn chưa được chạy bởi agent. Inventory live đầy đủ **chưa hoàn tất**; schema/type/constraint/RLS/grants/index/trigger/function/row counts vẫn chờ chủ dự án tự chạy và gửi kết quả đã che dữ liệu nhạy cảm.
+- Bộ SQL chỉ chứa SELECT và comments, không có row-level personal data selection, DDL hoặc lệnh ghi. `COUNT(*)` có thể scan bảng và phản ánh visibility của role/RLS hiện hành; chỉ chạy nếu chấp nhận tải đọc.
+- Không thay các câu hỏi mapping hoặc cổng backup/restore, staging, rollback và phê duyệt migration ở các phần trước.

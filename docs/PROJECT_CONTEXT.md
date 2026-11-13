@@ -75,3 +75,9 @@ Giai đoạn 2 tạo `DATA_CONTRACT.md`, `API_SPECIFICATION.md`, `DATABASE_MIGRA
 - Migration proposal ưu tiên bảo toàn: giữ legacy tables/raw values, dùng UUID mapping riêng thay vì cast ID, không drop/rename trong đợt đầu, giữ trạng thái unresolved cho tags/date/timezone/quality/stages chưa ánh xạ.
 - `docs/8E_MIGRATION_DECISIONS.md` liệt kê quyết định đã chốt, câu hỏi còn thiếu, yêu cầu backup/restore, staging, rollback và cổng phê duyệt.
 - Chưa tạo SQL executable, không chạy query ghi, migration hoặc backup/restore; chưa sửa Flutter/Express/API/schema/database.
+
+## Cập nhật sau Đợt 8E.2 — 2026-11-13
+
+- Tạo `docs/8E_READ_ONLY_INVENTORY.sql` gồm metadata/catalog SELECT và aggregate count để chủ dự án review/chạy thủ công; tạo `docs/8E2_INVENTORY_GUIDE.md` để hướng dẫn cách chạy và chia sẻ kết quả an toàn.
+- Bộ query chưa được chạy. Inventory live vẫn chưa hoàn tất; không coi output 8E.1 column-presence probe là xác minh type, constraints, RLS/grants, indexes, triggers/functions hoặc row counts.
+- Chưa có migration executable hoặc thay đổi Supabase. CRUD Dream/Sleep tiếp tục mock/local cho đến khi inventory và mapping được review.

@@ -73,3 +73,10 @@ Không có backup/restore nào được tạo trong Đợt 8E.1.
 ## 7. Phạm vi Đợt 8E.1
 
 Chỉ cập nhật tài liệu. Không đọc/sửa `.env` hoặc `server/.env`; không chạy SQL, migration, backup, restore hoặc write query; không đổi schema, RLS, policy, dữ liệu, Flutter, Express hay API CRUD; không commit/push.
+
+## 8. Cập nhật Đợt 8E.2 — inventory đang chờ chạy thủ công
+
+- Đã tạo `docs/8E_READ_ONLY_INVENTORY.sql` với các nhóm SELECT để chủ dự án review metadata columns, constraints, indexes, triggers/function identities, RLS/policies, grants, legacy columns và aggregate counts.
+- Đã tạo `docs/8E2_INVENTORY_GUIDE.md` hướng dẫn chạy từng statement trong Supabase SQL Editor, hiểu giới hạn catalog/RLS và che thông tin trước khi chia sẻ.
+- Bộ SQL chưa được chạy bởi agent và không chứng minh inventory live đã hoàn tất. Kết quả 8E.1 vẫn chỉ là column-presence probe.
+- Không thay đổi quyết định mapping; tags, dream date, legacy sleep timezone, quality, stages, ID strategy details, backup/restore, staging và rollback vẫn cần evidence/phê duyệt.

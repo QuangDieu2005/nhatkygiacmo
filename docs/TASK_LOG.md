@@ -334,3 +334,11 @@
 - Cập nhật `docs/PROJECT_CONTEXT.md` và `docs/DEVELOPMENT_PLAN.md` đồng bộ: Flutter Dream/Sleep CRUD vẫn mock; chưa migration; yêu cầu quyết định mapping, backup/restore và phê duyệt trước khi thực thi.
 - Kiểm tra nhất quán tài liệu: trạng thái live field availability khớp với kết quả probe đã log; legacy sleep fields/types được đánh dấu chưa xác minh live. `git diff --check`: PASS.
 - Chỉ sửa 5 tài liệu: `docs/SUPABASE_MIGRATION_PLAN.md`, `docs/8E_MIGRATION_DECISIONS.md`, `docs/PROJECT_CONTEXT.md`, `docs/DEVELOPMENT_PLAN.md`, `docs/TASK_LOG.md`. Không đọc/sửa `.env`/`server/.env`; không chạy SQL/migration/backup/restore, không đổi schema/policy/data/source, không commit/push.
+
+## Đợt 8E.2 — Hoàn thiện inventory Supabase chỉ đọc (2026-11-13)
+
+- Tạo `docs/8E_READ_ONLY_INVENTORY.sql` gồm SELECT metadata/catalog cho columns, constraints/FK cascade, indexes, triggers/function identities, RLS/policies, grants, legacy/target columns và aggregate row counts. SQL không chọn row-level records hoặc nội dung cá nhân; không có DDL/DML/RPC.
+- Tạo `docs/8E2_INVENTORY_GUIDE.md` hướng dẫn chạy từng statement thủ công, giới hạn catalog views/role/RLS/COUNT, phân biệt live metadata với schema repo, output cần gửi và cách che thông tin nhạy cảm.
+- Cập nhật `docs/8E_MIGRATION_DECISIONS.md`, `docs/SUPABASE_MIGRATION_PLAN.md`, `docs/PROJECT_CONTEXT.md`, `docs/DEVELOPMENT_PLAN.md`: inventory 8E.2 đang chờ chủ dự án review/chạy; chưa tuyên bố inventory live hoàn tất; mapping/migration gates không thay đổi.
+- Kiểm tra SQL tĩnh: mọi câu lệnh thực thi bắt đầu bằng `SELECT`; không có DDL/DML/UPSERT/RPC. Kiểm tra consistency tài liệu và `git diff --check`: PASS.
+- Chỉ thay đổi 7 tài liệu: `docs/8E_READ_ONLY_INVENTORY.sql`, `docs/8E2_INVENTORY_GUIDE.md`, `docs/8E_MIGRATION_DECISIONS.md`, `docs/SUPABASE_MIGRATION_PLAN.md`, `docs/PROJECT_CONTEXT.md`, `docs/DEVELOPMENT_PLAN.md`, `docs/TASK_LOG.md`. Không đọc/sửa `.env`/`server/.env`; không kết nối/chạy SQL lên Supabase; không migration, backup/restore hoặc thay schema/policy/data/source; không commit/push.

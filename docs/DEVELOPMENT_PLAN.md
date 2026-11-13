@@ -56,3 +56,8 @@ Không bắt đầu migration executable trước khi có inventory, quyết đ�
 - Đã cập nhật kế hoạch migration additive ưu tiên giữ nguyên legacy data và khả năng rollback; chưa có migration SQL executable.
 - Trước migration cần hoàn tất live catalog/data inventory chỉ đọc, quyết định mapping mơ hồ, backup + restore rehearsal, staging reconciliation, RLS/ownership test và phê duyệt rõ môi trường/lịch thực thi.
 - Flutter Dream/Sleep CRUD tiếp tục ở mock/local cho tới khi schema đích sẵn sàng và tương thích; không chuyển API client sang các route đang thiếu cột.
+
+## Cập nhật sau Đợt 8E.2 — 2026-11-13
+
+- Đã chuẩn bị bộ SQL inventory chỉ đọc và hướng dẫn để chủ dự án chạy thủ công trong SQL Editor; chưa chạy query, chưa xác nhận inventory live đầy đủ.
+- Bước tiếp theo là chủ dự án review/chạy từng nhóm, gửi lại metadata đã che thông tin nhạy cảm; sau đó mới cập nhật mapping/decision log. Chưa thực hiện migration hoặc cutover CRUD.
