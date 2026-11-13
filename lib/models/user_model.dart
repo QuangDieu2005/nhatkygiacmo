@@ -62,4 +62,48 @@ class UserModel {
           : DateTime.now(),
     );
   }
+
+  factory UserModel.fromAuthJson(
+    Map<String, dynamic> json, {
+    UserModel? localSettings,
+  }) {
+    final id = json['id'];
+    final email = json['email'];
+    if (id is! String || id.isEmpty || email is! String || email.isEmpty) {
+      throw const FormatException(
+        'Thông tin người dùng xác thực không hợp lệ.',
+      );
+    }
+
+    final metadataValue = json['user_metadata'];
+    final metadata = metadataValue is Map
+        ? Map<String, dynamic>.from(metadataValue)
+        : const <String, dynamic>{};
+    final rootName = json['name'];
+    final metadataName = metadata['name'];
+    final name = rootName is String && rootName.trim().isNotEmpty
+        ? rootName.trim()
+        : metadataName is String && metadataName.trim().isNotEmpty
+        ? metadataName.trim()
+        : email.split('@').first;
+
+    final rootAvatar = json['avatar_url'];
+    final metadataAvatar = metadata['avatar_url'];
+    final createdAtValue = json['created_at'];
+    return UserModel(
+      id: id,
+      email: email,
+      name: name,
+      avatarUrl: rootAvatar is String
+          ? rootAvatar
+          : metadataAvatar is String
+          ? metadataAvatar
+          : localSettings?.avatarUrl,
+      sleepGoalHours: localSettings?.sleepGoalHours ?? 8,
+      notificationsEnabled: localSettings?.notificationsEnabled ?? true,
+      createdAt: createdAtValue is String
+          ? DateTime.parse(createdAtValue)
+          : localSettings?.createdAt ?? DateTime.now(),
+    );
+  }
 }

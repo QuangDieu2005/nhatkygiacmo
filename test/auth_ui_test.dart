@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:my_app/core/errors/app_exception.dart';
 import 'package:my_app/core/routes/app_routes.dart';
 import 'package:my_app/core/theme/app_theme.dart';
 import 'package:my_app/features/authentication/presentation/forgot_password_screen.dart';
@@ -140,7 +141,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('HOME_MARKER'), findsNothing);
       expect(find.byIcon(Icons.mark_email_unread_outlined), findsOneWidget);
-      expect(find.textContaining('mock'), findsOneWidget);
+      expect(find.textContaining('xác nhận'), findsNWidgets(2));
     },
   );
 
@@ -156,7 +157,7 @@ void main() {
     expect(_fieldState(tester, 0).errorText, isNotNull);
   });
 
-  testWidgets('Forgot password mock success is clearly labeled', (
+  testWidgets('Forgot password reports that recovery is unsupported', (
     tester,
   ) async {
     final service = _FakeAuth();
@@ -168,9 +169,9 @@ void main() {
     await tester.tap(find.byType(ElevatedButton).last);
     await tester.pumpAndSettle();
     expect(service.forgotCalls, 1);
-    expect(find.byIcon(Icons.check_circle_outline_rounded), findsOneWidget);
-    expect(find.textContaining('demo'), findsOneWidget);
-    expect(find.textContaining('user@example.com'), findsOneWidget);
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.textContaining('chưa được hỗ trợ'), findsNWidgets(2));
+    expect(find.byIcon(Icons.check_circle_outline_rounded), findsNothing);
   });
 
   testWidgets('Forgot password failure is distinguishable from mock success', (
@@ -207,7 +208,8 @@ void main() {
     );
     service.forgotGate!.complete();
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.check_circle_outline_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle_outline_rounded), findsNothing);
+    expect(find.byType(SnackBar), findsOneWidget);
   });
 
   testWidgets(
@@ -321,6 +323,15 @@ class _FakeAuth implements AuthOperations {
   Completer<void>? forgotGate;
   UserModel? currentUser;
   String? token;
+  FutureOr<void> Function()? sessionExpiredHandler;
+
+  @override
+  void setSessionExpiredHandler(FutureOr<void> Function()? handler) {
+    sessionExpiredHandler = handler;
+  }
+
+  @override
+  DateTime? get expiresAt => null;
 
   @override
   bool get isAuthenticated => currentUser != null;
@@ -340,15 +351,17 @@ class _FakeAuth implements AuthOperations {
   }
 
   @override
-  Future<UserModel> register({
+  Future<AuthRegistrationResult> register({
     required String email,
     required String password,
     required String name,
   }) async {
     registerCalls++;
     if (failRegister) throw StateError('Registration rejected');
-    if (registerGate != null) return registerGate!.future;
-    return _user;
+    if (registerGate != null) {
+      await registerGate!.future;
+    }
+    return const AuthRegistrationResult.emailConfirmationRequired();
   }
 
   @override
@@ -356,6 +369,10 @@ class _FakeAuth implements AuthOperations {
     forgotCalls++;
     if (failForgot) throw StateError('Reset request rejected');
     if (forgotGate != null) return forgotGate!.future;
+    throw AuthException(
+      'Chức năng gửi email khôi phục mật khẩu chưa được hỗ trợ.',
+      code: 'NOT_SUPPORTED',
+    );
   }
 
   @override

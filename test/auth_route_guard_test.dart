@@ -97,6 +97,30 @@ void main() {
     expect(router.routeInformationProvider.value.uri.path, AppRoutes.login);
   });
 
+  testWidgets('session expiry refreshes router and returns to Login', (
+    tester,
+  ) async {
+    final service = _FakeAuth()..user = _testUser;
+    final auth = AuthProvider(authService: service);
+    await auth.checkAuthStatus();
+    final router = _testRouter(
+      auth,
+      _guard(auth),
+      initialLocation: AppRoutes.home,
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+    expect(find.text('HOME_ROUTE'), findsOneWidget);
+
+    service.sessionExpiredHandler!.call();
+    await tester.pumpAndSettle();
+
+    expect(find.text('LOGIN_ROUTE'), findsOneWidget);
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.login);
+  });
+
   test(
     'auth restoration loading waits on Splash and preserves target',
     () async {
@@ -206,12 +230,21 @@ final _testUser = UserModel(
 class _FakeAuth implements AuthOperations {
   UserModel? user;
   Completer<void>? initGate;
+  FutureOr<void> Function()? sessionExpiredHandler;
+
+  @override
+  void setSessionExpiredHandler(FutureOr<void> Function()? handler) {
+    sessionExpiredHandler = handler;
+  }
 
   @override
   UserModel? get currentUser => user;
 
   @override
   String? get token => user == null ? null : 'mock-token';
+
+  @override
+  DateTime? get expiresAt => null;
 
   @override
   bool get isAuthenticated => user != null;
@@ -229,11 +262,11 @@ class _FakeAuth implements AuthOperations {
   }
 
   @override
-  Future<UserModel> register({
+  Future<AuthRegistrationResult> register({
     required String email,
     required String password,
     required String name,
-  }) async => _testUser;
+  }) async => const AuthRegistrationResult.emailConfirmationRequired();
 
   @override
   Future<void> forgotPassword(String email) async {}

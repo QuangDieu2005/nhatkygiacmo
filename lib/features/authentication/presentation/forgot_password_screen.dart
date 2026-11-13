@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
@@ -18,7 +17,6 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  bool _submitted = false;
   bool _isSubmitting = false;
 
   @override
@@ -43,7 +41,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       if (!mounted) return;
 
       if (success) {
-        setState(() => _submitted = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Yêu cầu khôi phục đã được xử lý.')),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -80,7 +80,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 520),
-                    child: _submitted ? _buildSuccessView() : _buildFormView(),
+                    child: _buildFormView(),
                   ),
                 ),
               ),
@@ -107,7 +107,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Nh\u1eadp email \u0111\u00e3 \u0111\u0103ng k\u00fd. Ch\u00fang t\u00f4i s\u1ebd g\u1eedi h\u01b0\u1edbng d\u1eabn \u0111\u1eb7t l\u1ea1i m\u1eadt kh\u1ea9u cho b\u1ea1n.',
+            'Kh\u00f4i ph\u1ee5c m\u1eadt kh\u1ea9u ch\u01b0a \u0111\u01b0\u1ee3c h\u1ed7 tr\u1ee3. Backend ch\u01b0a c\u00f3 ch\u1ee9c n\u0103ng g\u1eedi email; y\u00eau c\u1ea7u s\u1ebd kh\u00f4ng \u0111\u01b0\u1ee3c g\u1eedi khi b\u1ea5m n\u00fat.',
             style: TextStyle(
               fontSize: 14,
               color: AppColors.textSecondary,
@@ -132,54 +132,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 onPressed: _handleResetPassword,
               );
             },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSuccessView() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.check_circle_outline_rounded,
-              color: AppColors.success,
-              size: 56,
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Y\u00eau c\u1ea7u kh\u00f4i ph\u1ee5c demo \u0111\u00e3 \u0111\u01b0\u1ee3c ghi nh\u1eadn',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'AuthService hi\u1ec7n ch\u1ec9 m\u00f4 ph\u1ecfng thao t\u00e1c. Kh\u00f4ng c\u00f3 email th\u1eadt \u0111\u01b0\u1ee3c g\u1eedi \u0111\u1ebfn ' +
-                _emailController.text +
-                '.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 14,
-              color: AppColors.textSecondary,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 32),
-          AppButton(
-            label: 'Quay l\u1ea1i \u0111\u0103ng nh\u1eadp',
-            onPressed: () => context.pop(),
           ),
         ],
       ),

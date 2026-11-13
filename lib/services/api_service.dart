@@ -1,9 +1,21 @@
+import 'package:dio/dio.dart';
+
 import '../core/network/api_client.dart';
-import '../models/user_model.dart';
 import '../models/dream_model.dart';
 import '../models/sleep_session_model.dart';
 
-class ApiService {
+abstract interface class AuthApiOperations {
+  Future<Map<String, dynamic>> login(String email, String password);
+  Future<Map<String, dynamic>> register(
+    String email,
+    String password,
+    String name,
+  );
+  Future<Map<String, dynamic>> refresh(String refreshToken);
+  Future<void> logout();
+}
+
+class ApiService implements AuthApiOperations {
   ApiService._();
   static final ApiService instance = ApiService._();
 
@@ -12,40 +24,50 @@ class ApiService {
   ApiClient get client => _client;
 
   // Authentication API endpoints (cho Node.js backend)
+  @override
   Future<Map<String, dynamic>> login(String email, String password) async {
-    // TODO: Khi nối Backend Node.js thực tế:
-    // final response = await _client.post('/auth/login', data: {'email': email, 'password': password});
-    // return response.data;
-    await Future.delayed(const Duration(milliseconds: 600));
-    return {
-      'token': 'mock_jwt_token_${DateTime.now().millisecondsSinceEpoch}',
-      'user': UserModel(
-        id: 'usr_${email.hashCode.abs()}',
-        email: email,
-        name: email.split('@').first,
-        createdAt: DateTime.now(),
-      ).toJson(),
-    };
+    final response = await _client.post<Map<String, dynamic>>(
+      '/auth/login',
+      data: {'email': email, 'password': password},
+      options: Options(extra: {'requiresAuth': false}),
+    );
+    return _mapResponse(response.data);
   }
 
+  @override
   Future<Map<String, dynamic>> register(
     String email,
     String password,
     String name,
   ) async {
-    // TODO: Khi nối Backend Node.js thực tế:
-    // final response = await _client.post('/auth/register', data: {'email': email, 'password': password, 'name': name});
-    // return response.data;
-    await Future.delayed(const Duration(milliseconds: 600));
-    return {
-      'token': 'mock_jwt_token_${DateTime.now().millisecondsSinceEpoch}',
-      'user': UserModel(
-        id: 'usr_${email.hashCode.abs()}',
-        email: email,
-        name: name,
-        createdAt: DateTime.now(),
-      ).toJson(),
-    };
+    final response = await _client.post<Map<String, dynamic>>(
+      '/auth/register',
+      data: {'email': email, 'password': password, 'name': name},
+      options: Options(extra: {'requiresAuth': false}),
+    );
+    return _mapResponse(response.data);
+  }
+
+  @override
+  Future<Map<String, dynamic>> refresh(String refreshToken) async {
+    final response = await _client.post<Map<String, dynamic>>(
+      '/auth/refresh',
+      data: {'refresh_token': refreshToken},
+      options: Options(extra: {'requiresAuth': false}),
+    );
+    return _mapResponse(response.data);
+  }
+
+  @override
+  Future<void> logout() async {
+    await _client.post<void>('/auth/logout');
+  }
+
+  Map<String, dynamic> _mapResponse(Object? value) {
+    if (value is! Map) {
+      throw const FormatException('Phản hồi xác thực không hợp lệ.');
+    }
+    return Map<String, dynamic>.from(value);
   }
 
   // Dreams API endpoints

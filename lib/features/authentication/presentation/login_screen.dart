@@ -116,6 +116,35 @@ class _LoginScreenState extends State<LoginScreen> {
                             color: AppColors.textSecondary,
                           ),
                         ),
+                        Consumer<AuthProvider>(
+                          builder: (context, auth, _) {
+                            if (!auth.isInitialized ||
+                                auth.status != AuthStatus.unauthenticated ||
+                                auth.errorMessage == null) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: Column(
+                                children: [
+                                  Text(
+                                    auth.errorMessage!,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: AppColors.error,
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: auth.status == AuthStatus.loading
+                                        ? null
+                                        : auth.retryRestoreSession,
+                                    child: const Text('Thử khôi phục phiên'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
                         const SizedBox(height: 36),
 
                         // Input Email

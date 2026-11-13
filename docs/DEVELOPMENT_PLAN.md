@@ -39,3 +39,13 @@ Kế hoạch theo kiến trúc đã được chọn: **Flutter → Node.js/Expre
 
 ## Cổng hoàn thành
 Không bắt đầu migration executable trước khi có inventory, quyết định các câu hỏi mở, backup/rollback và phê duyệt. Không đánh dấu CRUD/auth là live cho tới khi tích hợp và kiểm thử backend thật.
+
+## Cập nhật sau Đợt 8D.1 — 2026-11-13
+
+- AuthService/AuthProvider đã tích hợp source với response `user + session`, đăng ký pending email confirmation, secure token storage, login/register/refresh-on-restore/logout; ApiClient gắn Bearer cho request protected và giữ AuthRouteGuard/deep-link.
+- Còn lại: refresh/replay single-flight cho 401 phát sinh trong phiên đang chạy; xác định rõ behavior restore khi không có mạng; test end-to-end với user Supabase/Express trong môi trường kiểm soát. Forgot/reset email vẫn cần backend endpoint riêng.
+
+## C?p nh?t sau ??t 8D.2 ? 2026-11-13
+
+- ?? ho?n th?nh auto-refresh khi protected request nh?n 401, gi?i h?n m?t l?n retry, single-flight v? x? l? request 401 ??n mu?n b?ng access token v?a xoay. Refresh th?t b?i x?a phi?n c?c b? v? AuthProvider k?ch ho?t route guard v? Login.
+- C?n c?n ki?m ch?ng integration v?i Express/Supabase trong m?i tr??ng ki?m so?t; kh?ng thu?c ??t n?y. Dream/Sleep CRUD v?n n?m ? giai ?o?n sau.

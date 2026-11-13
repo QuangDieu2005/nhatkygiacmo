@@ -1,5 +1,9 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
+import '../core/errors/app_exception.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 
@@ -13,7 +17,9 @@ enum AuthStatus {
 
 class AuthProvider extends ChangeNotifier {
   AuthProvider({AuthOperations? authService})
-    : _authService = authService ?? AuthService.instance;
+    : _authService = authService ?? AuthService.instance {
+    _authService.setSessionExpiredHandler(_handleSessionExpired);
+  }
 
   final AuthOperations _authService;
 
@@ -22,6 +28,7 @@ class AuthProvider extends ChangeNotifier {
   String? _errorMessage;
   bool _isInitialized = false;
   Future<void>? _initializationFuture;
+  bool _emailConfirmationRequired = false;
 
   AuthStatus get status => _status;
   UserModel? get user => _user;
@@ -29,10 +36,16 @@ class AuthProvider extends ChangeNotifier {
   bool get isInitialized => _isInitialized;
   bool get isAuthenticated =>
       _status == AuthStatus.authenticated && _user != null;
+  bool get emailConfirmationRequired => _emailConfirmationRequired;
 
   Future<void> checkAuthStatus() {
     if (_isInitialized) return Future<void>.value();
     return _initializationFuture ??= _restoreAuthStatus();
+  }
+
+  Future<void> retryRestoreSession() {
+    _initializationFuture = _restoreAuthStatus();
+    return _initializationFuture!;
   }
 
   Future<void> _restoreAuthStatus() async {
@@ -48,7 +61,7 @@ class AuthProvider extends ChangeNotifier {
     } catch (error) {
       _user = null;
       _status = AuthStatus.unauthenticated;
-      _errorMessage = error.toString();
+      _errorMessage = _friendlyError(error);
     } finally {
       _isInitialized = true;
       notifyListeners();
@@ -59,6 +72,7 @@ class AuthProvider extends ChangeNotifier {
     if (_status == AuthStatus.loading) return false;
     _status = AuthStatus.loading;
     _errorMessage = null;
+    _emailConfirmationRequired = false;
     notifyListeners();
 
     try {
@@ -67,8 +81,9 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
+      _user = null;
       _status = AuthStatus.error;
-      _errorMessage = e.toString();
+      _errorMessage = _friendlyError(e, loginAttempt: true);
       notifyListeners();
       return false;
     }
@@ -82,19 +97,26 @@ class AuthProvider extends ChangeNotifier {
     if (_status == AuthStatus.loading) return false;
     _status = AuthStatus.loading;
     _errorMessage = null;
+    _emailConfirmationRequired = false;
     notifyListeners();
 
     try {
-      await _authService.register(email: email, password: password, name: name);
-      // Registration success is not equivalent to an authenticated,
-      // email-verified session. The current service only provides mock data.
-      _user = null;
-      _status = AuthStatus.unauthenticated;
+      final result = await _authService.register(
+        email: email,
+        password: password,
+        name: name,
+      );
+      _emailConfirmationRequired = result.requiresEmailConfirmation;
+      _user = result.user;
+      _status = result.user == null
+          ? AuthStatus.unauthenticated
+          : AuthStatus.authenticated;
       notifyListeners();
       return true;
     } catch (e) {
+      _user = null;
       _status = AuthStatus.error;
-      _errorMessage = e.toString();
+      _errorMessage = _friendlyError(e);
       notifyListeners();
       return false;
     }
@@ -113,7 +135,7 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       _status = AuthStatus.error;
-      _errorMessage = e.toString();
+      _errorMessage = _friendlyError(e);
       notifyListeners();
       return false;
     }
@@ -136,9 +158,50 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await _authService.logout();
+    try {
+      await _authService.logout();
+    } finally {
+      _user = null;
+      _status = AuthStatus.unauthenticated;
+      _emailConfirmationRequired = false;
+      notifyListeners();
+    }
+  }
+
+  void _handleSessionExpired() {
     _user = null;
     _status = AuthStatus.unauthenticated;
+    _errorMessage = null;
+    _emailConfirmationRequired = false;
+    _isInitialized = true;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _authService.setSessionExpiredHandler(null);
+    super.dispose();
+  }
+
+  String _friendlyError(Object error, {bool loginAttempt = false}) {
+    if (error is DioException && error.error is AppException) {
+      return _friendlyError(
+        error.error as AppException,
+        loginAttempt: loginAttempt,
+      );
+    }
+    if (error is NetworkException) {
+      return 'Không thể kết nối máy chủ. Kiểm tra mạng rồi thử lại.';
+    }
+    if (error is AppException) {
+      if (error.code == '401' || (loginAttempt && error.code == '400')) {
+        return 'Email hoặc mật khẩu không chính xác.';
+      }
+      return error.message;
+    }
+    if (error is FormatException) {
+      return 'Máy chủ trả về dữ liệu xác thực không hợp lệ.';
+    }
+    return 'Đã xảy ra lỗi xác thực. Vui lòng thử lại.';
   }
 }

@@ -49,3 +49,16 @@ Không suy đoán thay chủ dự án. Xem migration proposal để biết các 
 
 ## Tài liệu và giới hạn kiểm tra
 Giai đoạn 2 tạo `DATA_CONTRACT.md`, `API_SPECIFICATION.md`, `DATABASE_MIGRATION_PROPOSAL.md` và cập nhật context/plan/log. Chỉ rà soát tĩnh; không thực thi analyzer/test/server/migration trong nhiệm vụ này. Không thay đổi UI, app code, backend code, schema hay database.
+
+## Cập nhật sau Đợt 8D.1 — 2026-11-13
+
+- Flutter Authentication source nay gọi Express `/auth/login`, `/auth/register`, `/auth/refresh`, `/auth/logout`; token lưu bằng `flutter_secure_storage`. Auth restoration refresh token trước khi AuthRouteGuard phân loại trạng thái. Register session null được giữ unauthenticated/pending confirmation. Không có xác minh tài khoản thật trong test suite.
+- ApiClient lấy access token qua callback và mặc định gắn Bearer cho request cần auth; login/register/refresh là public, logout cần Bearer. API base URL mặc định `localhost:3000/api`, override bằng `--dart-define=API_BASE_URL=...`.
+- Forgot/reset email vẫn chưa hỗ trợ. Refresh hiện chạy khi khôi phục phiên lúc app mở và có thể retry thủ công sau lỗi mạng; chưa có auto-refresh/replay cho 401 phát sinh giữa phiên.
+- Dream/Sleep CRUD Flutter vẫn fixtures/stub. Không dùng Supabase Flutter cho auth hoặc CRUD; không xác minh end-to-end với user thật trong Đợt 8D.1.
+
+## C?p nh?t sau ??t 8D.2 ? 2026-11-13
+
+- ApiClient refresh access token khi request c?n Bearer nh?n 401; login/register/refresh b? lo?i kh?i lu?ng interceptor. Request g?c ???c replay t?i ?a m?t l?n v?i method, URL, query, body v? c?u h?nh c?n l?i ???c gi? t? RequestOptions.
+- AuthService d?ng single-flight refresh. N?u m?t 401 ??n sau khi token ?? ???c xoay, request ???c retry tr?c ti?p b?ng access token m?i nh?t thay v? t?o refresh th? hai. Refresh l?i s? x?a phi?n c?c b? trong secure storage, th?ng b?o AuthProvider unauthenticated v? k?ch ho?t route guard. L?i refresh kh?ng treo request.
+- C?c test d?ng fake Dio adapter, Auth API v? token storage; kh?ng d?ng t?i kho?n th?t. Dream/Sleep CRUD v?n ch?a t?ch h?p.

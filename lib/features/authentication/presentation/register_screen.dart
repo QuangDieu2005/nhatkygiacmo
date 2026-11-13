@@ -229,7 +229,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 18),
             const Text(
-              'Lu\u1ed3ng \u0111\u0103ng k\u00fd m\u00f4 ph\u1ecfng \u0111\u00e3 ho\u00e0n t\u1ea5t',
+              'Vui l\u00f2ng x\u00e1c nh\u1eadn email c\u1ee7a b\u1ea1n',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.textPrimary,
@@ -239,7 +239,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 10),
             const Text(
-              'AuthService hi\u1ec7n d\u00f9ng d\u1eef li\u1ec7u mock. T\u00e0i kho\u1ea3n th\u1eadt ch\u01b0a \u0111\u01b0\u1ee3c t\u1ea1o v\u00e0 email x\u00e1c th\u1ef1c ch\u01b0a \u0111\u01b0\u1ee3c g\u1eedi.',
+              'Y\u00eau c\u1ea7u \u0111\u0103ng k\u00fd c\u1ea7n x\u00e1c nh\u1eadn email. N\u1ebfu \u0111\u1ecba ch\u1ec9 n\u00e0y h\u1ee3p l\u1ec7, h\u00e3y ki\u1ec3m tra h\u1ed9p th\u01b0 v\u00e0 x\u00e1c nh\u1eadn tr\u01b0\u1edbc khi \u0111\u0103ng nh\u1eadp.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textSecondary, height: 1.5),
             ),
