@@ -342,3 +342,15 @@
 - Cập nhật `docs/8E_MIGRATION_DECISIONS.md`, `docs/SUPABASE_MIGRATION_PLAN.md`, `docs/PROJECT_CONTEXT.md`, `docs/DEVELOPMENT_PLAN.md`: inventory 8E.2 đang chờ chủ dự án review/chạy; chưa tuyên bố inventory live hoàn tất; mapping/migration gates không thay đổi.
 - Kiểm tra SQL tĩnh: mọi câu lệnh thực thi bắt đầu bằng `SELECT`; không có DDL/DML/UPSERT/RPC. Kiểm tra consistency tài liệu và `git diff --check`: PASS.
 - Chỉ thay đổi 7 tài liệu: `docs/8E_READ_ONLY_INVENTORY.sql`, `docs/8E2_INVENTORY_GUIDE.md`, `docs/8E_MIGRATION_DECISIONS.md`, `docs/SUPABASE_MIGRATION_PLAN.md`, `docs/PROJECT_CONTEXT.md`, `docs/DEVELOPMENT_PLAN.md`, `docs/TASK_LOG.md`. Không đọc/sửa `.env`/`server/.env`; không kết nối/chạy SQL lên Supabase; không migration, backup/restore hoặc thay schema/policy/data/source; không commit/push.
+
+## Đợt 8E.3 — Hoàn thiện thiết kế migration Supabase (2026-11-13)
+
+- Đọc 8E migration docs, inventory SQL/guide, contract/API spec và Express Dream/Sleep routes + validation. Dựa trên live inventory do chủ dự án cung cấp; không kết nối/chạy lại SQL.
+- Cập nhật `docs/SUPABASE_MIGRATION_PLAN.md` với schema live đầy đủ, phân biệt schema tham chiếu repository, mapping legacy → target, so sánh phương án A (shadow fields) và B (bảng contract mới), khuyến nghị B có điều kiện, preflight, backup/restore, staging, read-only dry-run checks, DDL/backfill gates, cutover/rollback và stop conditions.
+- Cập nhật `docs/8E_MIGRATION_DECISIONS.md` ghi snapshot live/security/count, tác động từng lựa chọn, phương án đề xuất nhưng chưa phê duyệt, mappings chưa quyết định và cổng cần chủ dự án duyệt.
+- Cập nhật `docs/8E2_INVENTORY_GUIDE.md`, `docs/PROJECT_CONTEXT.md`, `docs/DEVELOPMENT_PLAN.md` để inventory user-provided được ghi nhận, counts 0/0 là snapshot cần recheck và inventory không được coi là dữ liệu bất biến.
+- Kết quả sử dụng: Dream legacy bigint PK/tags text; Sleep bigint PK, sleep_time/wake_time text, quality 1–10, stage không có; FK cascade/RLS policies/indexes được xác nhận; counts 0/0 tại lúc inventory. Direct function dependency rỗng không chứng minh không có SQL/PL/pgSQL references. Grants không tự thay đổi.
+- Rà soát `server.js`: `DELETE /api/account/data` hiện xóa legacy dreams/sleep bằng hai request riêng, không atomic; phương án bảng song song cần mở rộng deletion/recovery trước khi target CRUD được expose.
+- Kiểm tra consistency với backend routes/validation: routes hiện query `dreams`/`sleep_records` theo fields contract mới và cần target schema/API rollout trước khi bật CRUD. `git diff --check`: PASS.
+- File cập nhật trong Đợt 8E.3: `docs/8E_MIGRATION_DECISIONS.md`, `docs/SUPABASE_MIGRATION_PLAN.md`, `docs/8E2_INVENTORY_GUIDE.md`, `docs/PROJECT_CONTEXT.md`, `docs/DEVELOPMENT_PLAN.md`, `docs/TASK_LOG.md`. Không chạy test/linter vì chỉ thay đổi tài liệu.
+- Chỉ cập nhật tài liệu. Không đọc/sửa `.env`/`server/.env`; không kết nối/chạy SQL, migration, backup hoặc restore; không sửa code/schema/policy/grants/data; không commit/push.

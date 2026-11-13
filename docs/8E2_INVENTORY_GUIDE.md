@@ -54,3 +54,7 @@ Không gửi sample rows để giải thích delimiter/timezone. Mapping cần e
 - Không tạo sleep stage values.
 - Không cast legacy ID sang UUID; cần type/FK/consumer inventory và UUID mapping decision.
 - Không chạy migration/backfill hoặc cutover trước backup + restore rehearsal, staging reconciliation, mapping approvals và phê duyệt thực thi riêng.
+
+## Cập nhật theo kết quả Đợt 8E.3
+
+Chủ dự án đã cung cấp kết quả inventory live gồm column types/constraints, FK cascade, RLS/policies, indexes, triggers/function dependency và COUNT snapshot 0/0. Agent không chạy lại SQL. Hãy xem `docs/SUPABASE_MIGRATION_PLAN.md` và `docs/8E_MIGRATION_DECISIONS.md` để biết cách sử dụng snapshot này; trước migration vẫn phải recheck drift và row counts.

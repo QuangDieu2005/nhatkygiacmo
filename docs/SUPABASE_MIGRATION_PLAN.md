@@ -1,133 +1,182 @@
-# Supabase Migration Plan — Dream Diary (Đợt 8E.1)
+# Supabase Migration Plan — Dream Diary (Đợt 8E.3)
 
-**Trạng thái:** kế hoạch review; chưa có migration SQL executable và chưa thay đổi Supabase. Project đã được xác minh bằng REST schema probes chỉ đọc (`SELECT ... LIMIT 0`); probes không lấy rows và chỉ xác minh sự hiện diện của cột, không xác minh kiểu dữ liệu, nullability, default, constraint, index, policy hay grants.
+**Trạng thái:** thiết kế migration để review; chưa có migration SQL executable và chưa thay đổi Supabase. Inventory live được chủ dự án cung cấp sau khi chạy bộ inventory thủ công. Thông tin dưới đây là kết quả kiểm kê được cung cấp; agent không tự kết nối/chạy lại SQL trong Đợt 8E.3.
 
-**Ưu tiên:** giữ nguyên mọi dữ liệu legacy, duy trì khả năng khôi phục và rollback. Kiến trúc ứng dụng: Flutter → Express REST API → Supabase PostgreSQL/Auth. Flutter không truy cập Supabase trực tiếp cho CRUD nghiệp vụ.
+**Ưu tiên:** bảo toàn dữ liệu legacy, duy trì đường phục hồi. Không drop, truncate, rename hoặc ghi đè bảng/cột cũ trong migration đầu tiên.
 
-## 1. Hai nguồn hiện trạng cần phân biệt
+## 1. Kiến trúc và contract đích
 
-### 1.1 Project Supabase thực tế đã xác minh
+Kiến trúc nghiệp vụ: **Flutter → Express REST API → Supabase PostgreSQL/Auth**. Flutter không CRUD trực tiếp với Supabase. API routes hiện tại lọc owner bằng `req.user.id`, trả list JSON array và parse/validate theo contract mới.
 
-Kết quả được ghi trong `docs/TASK_LOG.md` ở mục “Supabase connection investigation”. Các probes kiểm tra metadata cột bằng query không lấy row:
+Contract target theo `docs/DATA_CONTRACT.md`, `docs/API_SPECIFICATION.md`, `server/src/routes/dreams.js`, `server/src/routes/sleepRecords.js`, `server/src/validation.js`:
 
-| Bảng | Cột hiện diện trong project theo probe | Cột đích được probe nhưng chưa hiện diện |
+- Dream: UUID `id`; UUID `user_id` lấy từ JWT đã xác minh; `title`, `content`, `emotion` text; `tags` text array; `clarity_score` integer 1–5; `is_lucid` boolean; `dream_date` DATE; `created_at` timestamp.
+- Sleep: UUID `id`; UUID `user_id`; `start_time`/`end_time` timestamp có timezone; `duration_minutes` do Express tính; `quality_score` integer 0–100; ba stage-minute integer không âm; `notes`; `created_at`.
+- API hiện dùng `dreams` và `sleep_records`, UUID path/body response fields; request không nhận `id`, `user_id`, `created_at`, `duration_minutes` hoặc trạng thái tracking.
+- Express routes truy vấn các trường contract trực tiếp trên `dreams`/`sleep_records`. Do đó schema contract mới phải được cung cấp ở đúng API boundary hoặc routes được đổi trong một rollout riêng trước khi mở CRUD.
+- `DELETE /api/account/data` hiện xóa theo hai request liên tiếp trên legacy `dreams` rồi `sleep_records`, không atomic. Khi target tables được dùng, endpoint này sẽ không xóa target data nếu chưa cập nhật backend; cần thiết kế hành vi all-or-nothing/recovery và test trước expose. Đây là blocker cutover, không sửa trong Đợt 8E.3.
+
+## 2. Schema live đã kiểm kê
+
+> Nguồn: inventory results do chủ dự án cung cấp trong yêu cầu Đợt 8E.3. Đây là snapshot tại thời điểm kiểm tra, không đảm bảo trạng thái không đổi tới lúc migration.
+
+### `public.dreams`
+
+- `id bigint identity`, primary key.
+- `user_id UUID NOT NULL`, FK `auth.users(id) ON DELETE CASCADE`.
+- `title`, `content`, `emotion`: `text NOT NULL`.
+- `tags`: `text NOT NULL DEFAULT ''`.
+- `created_at`: `timestamptz NOT NULL DEFAULT now()`.
+- Không có `clarity_score`, `is_lucid`, `dream_date`.
+- RLS enabled, not forced. SELECT/INSERT/UPDATE/DELETE policies cho role `authenticated`; owner rule `auth.uid() = user_id`.
+- PK index và index `(user_id, created_at DESC)`. Không có custom trigger được tìm thấy.
+
+### `public.sleep_records`
+
+- `id bigint identity`, primary key.
+- `user_id UUID NOT NULL`, FK `auth.users(id) ON DELETE CASCADE`.
+- `sleep_time`, `wake_time`: `text NOT NULL`.
+- `duration_minutes`: `integer NOT NULL CHECK (duration_minutes >= 0)`.
+- `quality`: `integer NOT NULL CHECK (quality BETWEEN 1 AND 10)`.
+- `note`: `text NOT NULL DEFAULT ''`.
+- `created_at`: `timestamptz NOT NULL DEFAULT now()`.
+- Không có `start_time`, `end_time`, `quality_score`, `deep_sleep_minutes`, `light_sleep_minutes`, `rem_sleep_minutes`, `notes`.
+- RLS enabled, not forced. SELECT/INSERT/UPDATE/DELETE policies cho role `authenticated`; owner rule `auth.uid() = user_id`.
+- PK index và index `(user_id, created_at DESC)`. Không có custom trigger được tìm thấy.
+
+Inventory không tìm thấy function dependency trực tiếp được PostgreSQL ghi nhận trên hai bảng. Điều đó **không chứng minh** không có PL/pgSQL hoặc SQL động tham chiếu tới bảng. Grants đã được kiểm tra; không có grant matrix chi tiết trong yêu cầu này, nên không suy ra hoặc đề xuất thay đổi grants hiện hữu. Cần giữ nguyên grants legacy.
+
+`COUNT(*)` snapshot tại thời điểm kiểm kê: `dreams = 0`, `sleep_records = 0`. Đây không phải bảo đảm số lượng vẫn là 0 khi thực thi. Đếm lại ngay trước mỗi pha có ghi; nếu khác 0, dừng để áp dụng nhánh bảo toàn/backfill đã được duyệt.
+
+## 3. Schema tham chiếu trong repository
+
+`supabase_schema.sql` là schema tham chiếu, không dùng làm bằng chứng thay thế inventory live. Theo file này, legacy schema có bigint identity IDs, Dream tags dạng text, và Sleep fields `sleep_time`/`wake_time` text, `quality` 1–10, `note`; RLS/policies/grants/indexes được khai báo trong SQL. Inventory live được cung cấp hiện đã xác nhận các thuộc tính chính nêu tại mục 2. Không giả định objects khác ngoài kết quả inventory.
+
+## 4. Bảng mapping legacy → target
+
+| Legacy live field | Target/API field | Mapping proposal | Trạng thái / rủi ro |
+|---|---|---|---|
+| Dream `id bigint identity PK` | `id UUID` | Không cast. Cấp UUID mới trong bảng target; giữ mapping ổn định `(legacy table, legacy bigint id) → target UUID` nếu có backfill hoặc cần truy xuất lịch sử. | Kiểu legacy đã xác minh. Với count hiện tại 0, mapping có thể rỗng nếu recheck vẫn 0; vẫn giữ cơ chế mapping nếu có legacy row. |
+| Sleep `id bigint identity PK` | `id UUID` | Cùng nguyên tắc UUID mới + mapping; không đổi PK legacy. | Như trên. |
+| `user_id UUID NOT NULL` + FK cascade | `user_id UUID` | Copy nguyên UUID sau khi reconciliation; target giữ FK tới `auth.users(id) ON DELETE CASCADE`. Không thay đổi owner hoặc cascade semantics. | FK/type/cascade đã xác minh. Đếm orphan vẫn phải kiểm tra trước backfill/cutover. |
+| Dream `title/content/emotion text NOT NULL` | Cùng tên, text bắt buộc | Copy nguyên giá trị nếu backfill được duyệt; báo counts cho null/invalid emotion/over-limit thay vì normalize âm thầm. | Types/nullability đã xác minh; contract limits/enum cần reconcile. |
+| Dream `tags text NOT NULL DEFAULT ''` | `tags text[]` | Giữ cột/source nguyên trạng. Chỉ parse sau khi xác định delimiter, escaping, whitespace/duplicate rules từ evidence và được duyệt. Không thay raw bằng `{}` hoặc split tùy ý. | **Chưa có delimiter/evidence.** Nếu rows xuất hiện trước cutover, unresolved tags là stop condition cho việc đưa row vào API target. |
+| Không có legacy clarity/lucid fields | `clarity_score` integer 1–5; `is_lucid` boolean | Không backfill tự động. Record cũ chưa có giá trị nguồn; nếu contract target yêu cầu NOT NULL/default thì quyết định rõ liệu giữ record legacy/unresolved hay nhập bổ sung có nguồn tin cậy. | **Chưa có nguồn. Không gán default lịch sử như thể đó là dữ liệu thật.** |
+| Không có legacy `dream_date` | `dream_date DATE` | Không suy từ `created_at`. Chỉ backfill nếu có nguồn ngày đáng tin cậy hoặc chủ dự án duyệt quy trình remediation riêng. | **Chưa có nguồn.** Row chưa có ngày không thể được phục vụ như DreamDTO hiện tại. |
+| Dream `created_at timestamptz NOT NULL DEFAULT now()` | `created_at` | Giữ giá trị gốc khi copy; không dùng nó làm ngày mơ. | Kiểu/default đã xác minh. |
+| Sleep `sleep_time/wake_time text NOT NULL` | `start_time/end_time` UTC instants | Giữ raw fields. Xác định format, ngày đi kèm, timezone và DST trước parse. Parse failure/ambiguity giữ legacy/unresolved; không sửa source. | **Chưa có sample/semantics được duyệt.** |
+| Sleep `duration_minutes integer NOT NULL CHECK >= 0` | `duration_minutes` do Express tính | Giữ giá trị legacy để đối chiếu. Target duration tính từ timestamps hợp lệ; không tin/ghi đè duration legacy trước reconciliation. | Type/check đã xác minh; nguồn/công thức lịch sử chưa xác minh. |
+| Sleep `quality integer NOT NULL CHECK 1–10` | `quality_score integer 0–100` | Giữ raw score. Không scale/round/map nếu chưa duyệt semantics/công thức. | **Mapping chưa chốt.** |
+| Không có legacy stage columns | `deep/light/rem_sleep_minutes` | Không tạo giá trị cho rows legacy. Phân biệt unknown/missing với số 0 thực; target nullability/default cần decision nếu backfill được yêu cầu. | **Không có nguồn.** Contract API hiện mặc định 0 cho request thiếu, nhưng không dùng default đó để tuyên bố stage lịch sử bằng 0. |
+| Sleep `note text NOT NULL DEFAULT ''` | `notes` | Copy nguyên raw text nếu thực hiện backfill; giữ khác biệt null/empty theo schema live (live cột hiện NOT NULL). | Type/default đã xác minh; cần xác nhận giới hạn/semantics API. |
+| Sleep `created_at timestamptz NOT NULL DEFAULT now()` | `created_at` | Giữ giá trị gốc; không suy sleep start/end từ cột này. | Đã xác minh. |
+
+Nếu hai bảng vẫn rỗng tại thời điểm migration, không cần backfill rows legacy; bỏ qua mapping giá trị cũ nhưng vẫn giữ nguyên bảng legacy và lưu mapping table rỗng/khả năng mapping nếu policy dự án yêu cầu. Nếu bất kỳ bảng nào có rows mới, không chuyển tự động cho đến khi mapping mơ hồ được duyệt. Không tách unknown, NULL, default và observed value thành cùng một giá trị.
+
+## 5. So sánh hai phương án additive
+
+| Tiêu chí | A. Bổ sung cột/shadow fields trên bảng hiện tại | B. Tạo bảng contract mới, giữ nguyên bảng legacy |
 |---|---|---|
-| `dreams` | `id`, `user_id`, `title`, `content`, `emotion`, `tags`, `created_at` | `clarity_score`, `is_lucid`, `dream_date` |
-| `sleep_records` | `id`, `user_id`, `duration_minutes`, `created_at` | `start_time`, `end_time`, `quality_score`, `deep_sleep_minutes`, `light_sleep_minutes`, `rem_sleep_minutes`, `notes` |
+| Bảo toàn legacy | Giữ nguyên các cột hiện tại nhưng writes mới và cột cũ cùng tồn tại; cần bảo đảm constraints legacy không chặn insert mới. | Legacy tables không bị sửa; source history giữ nguyên trực tiếp. Target có schema riêng. |
+| UUID API ID | `id` hiện là bigint PK; thêm UUID shadow field không làm API hiện tại dùng `id UUID`. Cần view/API projection hoặc sửa routes. | Target có UUID primary key ngay; API routes vẫn cần đổi target table name hoặc qua view. |
+| Tags | `tags text` không thể đồng thời là `text[]`; cần shadow array field và API projection. | Target `tags text[]`; raw legacy tags ở nguyên bảng cũ. |
+| Code compatibility | Không tương thích trực tiếp với routes hiện tại do UUID `id`, tags array và missing fields; cần compatibility view/projection. View writes/RLS cần test kỹ. | Không tương thích trực tiếp vì routes đang trỏ `dreams`/`sleep_records`; cần đổi cấu hình/routes trong rollout riêng sang target tables. |
+| Độ phức tạp | Cao: dual columns, old NOT NULL/check constraints, views, writes cũ/mới đồng thời, backfill trong cùng table. | Trung bình: tạo hai tables, mapping, policies/indexes mới và cutover backend; boundaries rõ hơn. |
+| Rủi ro dữ liệu | Có thể tạo state lệch giữa legacy và shadow columns; rollback khó nếu dual-write thiếu. | Legacy records không bị chuyển đổi hoặc mutate; target mới tách biệt. Nếu target writes đã bắt đầu, API rollback phải giữ đường đọc target. |
+| Rollback | Khó phân định source of truth sau dual-write; cần đồng bộ hai chiều hoặc compatibility layer. | Trước cutover quay lại legacy dễ; sau target writes không được bỏ target, cần giữ API compatibility/forward-fix và dữ liệu target. |
 
-Kết quả này **không xác minh** kiểu dữ liệu hoặc constraint của cột hiện diện; cũng không xác minh các legacy column `sleep_time`, `wake_time`, `quality`, `note`, quan hệ FK, RLS/policies/grants, indexes, triggers, row count hoặc nội dung dữ liệu. Không suy rộng từ schema file trong repository sang project live.
+### Khuyến nghị
 
-### 1.2 Schema tham chiếu trong repository
+**Chọn B — bảng contract mới song song, có điều kiện.** Tên minh họa có thể là `dreams_v2`/`sleep_records_v2` nhưng chưa chốt. Phương án này tách hoàn toàn schema/API mới khỏi PK bigint, `tags text`, và Sleep fields cũ; phù hợp nhất với ưu tiên không chạm/xóa legacy. Hai bảng legacy tiếp tục tồn tại không đổi để đối chiếu và phục hồi.
 
-Theo `supabase_schema.sql` đã review tĩnh (không phải inventory live):
+Điều kiện: inventory row count phải được chạy lại ngay trước migration. Snapshot hiện tại 0/0 không bảo đảm rows vẫn rỗng. Nếu vẫn 0, tạo target tables không backfill. Nếu count khác 0, dừng migration/backfill cho tới khi mapping từng loại dữ liệu được quyết định và rehearsal đạt.
 
-- `dreams`: `id bigint identity`, owner UUID FK tới `auth.users`, `title/content/emotion/tags` là text, `created_at timestamptz`; chưa có `clarity_score`, `is_lucid`, `dream_date`.
-- `sleep_records`: `id bigint identity`, owner UUID FK tới `auth.users`, `sleep_time/wake_time` text, `duration_minutes integer`, `quality integer` 1–10, `note text`, `created_at timestamptz`; chưa có `start_time/end_time` TIMESTAMPTZ và các stage-minute fields.
-- SQL tham chiếu khai báo RLS/policies theo `auth.uid() = user_id`, grants, và index owner/created. **Các khai báo này chưa được xác nhận trên project live trong Đợt 8E.1.**
+Phương án B vẫn cần thay đổi backend/API source ở một đợt riêng để routes dùng target tables hoặc một compatibility layer đã được test. Không bật các CRUD routes hiện tại trực tiếp với target/legacy schema cho đến khi bảng và route contract khớp. Flutter vẫn dùng mock/local cho tới khi rollout được duyệt.
 
-## 2. Hợp đồng đích
+## 6. Target schema/security design cần review
 
-Hợp đồng đích lấy từ `docs/DATA_CONTRACT.md` và `docs/API_SPECIFICATION.md`, không phải mô tả hiện trạng live:
+Đây là thuộc tính thiết kế, không phải DDL:
 
-- Dream: UUID ID; owner từ JWT; text title/content/emotion; `tags text[]`; clarity 1–5; lucid boolean; `dream_date DATE`; `created_at TIMESTAMPTZ`.
-- Sleep: UUID ID; owner từ JWT; `start_time/end_time TIMESTAMPTZ`; `duration_minutes` do Express tính; quality 0–100; các stage minutes không âm; notes; `created_at TIMESTAMPTZ`.
-- `id`, `user_id`, `created_at` là server/database-managed. Client không gửi `duration_minutes`.
-- GET list trả JSON array trực tiếp; Express lọc owner theo JWT đã xác minh.
+- Target record ID là UUID primary key do database/server sinh; mapping table giữ legacy table + legacy bigint ID + target UUID, có uniqueness ở cả legacy key và target UUID.
+- Owner `user_id UUID NOT NULL` FK `auth.users(id) ON DELETE CASCADE`, đúng contract và legacy semantics.
+- Target Dream columns đáp ứng API contract, bao gồm `tags text[]`, `dream_date DATE`, clarity/lucid. Không thêm backfill values cho rows cũ khi không có nguồn.
+- Target Sleep columns đáp ứng API contract; duration do Express tính và không nhận từ client. Chốt nullability/default để phân biệt chưa biết với số 0 thực.
+- Giữ RLS enabled, không FORCE, và owner policies `auth.uid() = user_id` cho target tables làm baseline đề xuất; verify lại trên staging. Không sửa policies/grants của legacy tables.
+- Grant matrix của target tables phải được review theo Express/service-role architecture. Không tự cấp/revoke/đổi grants hiện hữu; mọi thay đổi quyền cần approval riêng. Server dùng privileged client vẫn phải filter mọi query theo JWT owner.
+- Tạo target indexes tương đương nhu cầu truy vấn `(user_id, created_at DESC)` và PK; xem xét indexes cho date/time filters sau khi query plan được kiểm tra staging. Không tạo custom trigger/function nếu không có yêu cầu; không khẳng định vắng mặt ngoài kết quả inventory.
+- Account-data deletion phải được thiết kế lại trong rollout backend trước khi target data được dùng: hiện endpoint chỉ xóa legacy tables bằng hai request không atomic. Giữ cascade `auth.users` như một safety behavior đã xác minh, nhưng không dựa vào cascade để thay thế hành vi API deletion/retention đã định nghĩa.
 
-Hợp đồng đích không xác định cách diễn dịch dữ liệu legacy còn mơ hồ; không được tạo giá trị thay thế để làm đầy cột đích.
+## 7. Vận hành theo pha và phân loại thao tác
 
-## 3. Bảng mapping legacy → đích
+### Pha 0 — Read-only preflight (chưa ghi)
 
-“Hiện diện” và “thiếu” bên dưới là kết quả probe live; kiểu dữ liệu/constraint live chưa xác minh trừ khi ghi khác. Không có mapping nào trong bảng này được phép chạy trước khi được phê duyệt.
+- Xác nhận đúng project/environment, thời điểm và quyền truy cập; inventory live đầy đủ đã được cung cấp nhưng phải kiểm tra drift trước khi chạy.
+- Chạy lại aggregate counts; kiểm tra types/constraints/policies/grants/indexes và table writers/consumers.
+- Read-only aggregate checks: số records theo bảng/owner (chỉ counts), orphan owner counts, target duplicate/mapping conflicts nếu đã có staging target, missing/invalid values theo từng field, tags parseability counts, timestamp parse/ambiguity counts, quality range counts, duration mismatch counts. Không export PII.
+- **Stop:** nếu counts khác snapshot 0/0 thì không backfill/cutover; yêu cầu mapping approval. Stop nếu inventory drift, unknown writer, permission error, orphan, duplicate mapping, invalid data hoặc kết quả không đầy đủ.
 
-| Thành phần legacy | Trạng thái live đã kiểm tra | Trường đích | Phương án bảo toàn đề xuất | Trạng thái quyết định / rủi ro |
-|---|---|---|---|---|
-| Dream `id` | Cột hiện diện; live type chưa kiểm tra. Repository SQL tham chiếu nói `bigint identity`. | UUID `id` | Không cast. Tạo UUID mới và mapping bền vững từ khóa legacy đã xác minh sang UUID; giữ legacy ID và mapping trong suốt thời gian tương thích/khôi phục. | Cần xác minh type, PK/FK và consumers. Chưa chọn shadow column hay bảng chuyển tiếp. |
-| Dream `user_id` | Cột hiện diện; live type/FK chưa kiểm tra. | UUID `user_id` từ Supabase Auth | Giữ raw value; trước backfill xác minh mọi giá trị khớp Auth user và FK/ownership. Không sửa owner tự động. | Chưa xác minh orphan rows, FK, cascade hoặc type live. |
-| Dream `title`, `content`, `emotion` | Cột hiện diện; type/nullability/constraints live chưa kiểm tra. | Giữ cùng field | Sao chép nguyên giá trị sau khi xác minh encoding, nullability và giới hạn API/DB. | Cần báo cáo null, length và emotion ngoài enum trước cutover; không tự normalize âm thầm. |
-| Dream `tags` | Cột hiện diện; live type và serialized format chưa xác minh. Repository SQL tham chiếu khai báo `text`. | `text[]` | Giữ nguyên raw source. Chỉ parse sau khi xác định delimiter/escaping từ evidence và được duyệt; ghi mapping status/error để row mơ hồ không mất dấu. | **Chưa đủ dữ liệu. Không tự chọn delimiter, không split theo giả định, không thay bằng mảng rỗng.** |
-| Dream `clarity_score`, `is_lucid` | Chưa hiện diện theo probe. | integer 1–5; boolean | Không có nguồn legacy được xác minh. Thêm như shadow/transition fields chỉ khi chủ dự án duyệt semantics và default; nếu chưa thì giữ record ở legacy/unresolved, không tự gán dữ liệu. | **Chưa có dữ liệu nguồn; default contract không đồng nghĩa được phép ghi đè quá khứ.** |
-| Dream `dream_date` | Chưa hiện diện theo probe. | `DATE` theo contract | Không suy từ `created_at`. Giữ chưa ánh xạ cho đến khi có nguồn ngày đáng tin cậy hoặc quyết định xử lý từng row. | **Chưa đủ dữ liệu. `created_at` không chứng minh ngày đã mơ.** |
-| Dream `created_at` | Cột hiện diện; live type/default chưa kiểm tra. | `TIMESTAMPTZ` | Giữ raw/backup; chỉ copy sau khi xác minh kiểu và timezone semantics. | Không khẳng định type live chỉ từ tên cột. |
-| Sleep `id` | Cột hiện diện; live type chưa kiểm tra. Repository SQL tham chiếu nói `bigint identity`. | UUID `id` | UUID mới + mapping bền vững; tuyệt đối không cast bigint sang UUID. | Cần xác minh PK/FK và consumers trước khi chọn mapping key. |
-| Sleep `user_id` | Cột hiện diện; live type/FK chưa kiểm tra. | UUID từ JWT/Auth | Giữ raw value; xác minh ownership và orphan trước backfill. | Chưa xác minh type, FK, cascade hoặc dữ liệu owner. |
-| Sleep `sleep_time`, `wake_time` | Chưa probe được trên live. Chỉ có trong schema tham chiếu dạng text. | `start_time`, `end_time` UTC instants | Trước tiên inventory live schema và format thực tế. Giữ nguyên raw values. Chỉ parse với timezone/DST rule được duyệt; lỗi hoặc mơ hồ giữ ở legacy/unresolved. | **Chưa đủ dữ liệu. Không suy timezone hoặc ngày qua `created_at`.** |
-| Sleep `duration_minutes` | Cột hiện diện; live type/meaning/consistency chưa kiểm tra. | Server-calculated integer từ hai timestamp | Không coi giá trị hiện tại là authoritative cho tới khi đối chiếu với timestamps đã được phê duyệt. Giữ giá trị legacy riêng và báo cáo chênh lệch; target duration tính từ start/end ở Express. | Chưa biết nó được tạo bởi công thức nào và có được ghi bởi client hay không. |
-| Sleep `quality` | Chưa probe được trên live. Schema tham chiếu nói integer 1–10, chưa xác nhận thực tế. | `quality_score` integer 0–100 | Giữ raw numeric/text value. Không scale hoặc map cho đến khi type, phân phối, semantics và công thức được chủ dự án duyệt. | **Chưa đủ dữ liệu. Không tự nhân 10 hoặc suy diễn giá trị.** |
-| Sleep stage minutes | Chưa có trong schema tham chiếu; live chưa được probe riêng ngoài các target columns bị thiếu. | deep/light/REM minutes | Không tạo dữ liệu stages. Có thể để unresolved/unknown ở transition path cho tới khi quyết định rõ target nullable/default và semantics. | **Không có nguồn legacy đã biết; không sinh dữ liệu giả.** |
-| Sleep `note` | Chưa probe được trên live. Chỉ có trong schema tham chiếu dạng text. | `notes` | Nếu xác minh tồn tại, copy raw text sau khi thống nhất null/empty semantics; giữ source nguyên trạng. | Live existence và type chưa xác minh. |
-| Sleep `created_at` | Cột hiện diện; live type/default chưa kiểm tra. | `TIMESTAMPTZ` | Giữ raw/backup, xác minh type/semantics trước khi copy. | Không dùng thay `start_time`/`end_time`. |
+#### Read-only pre/post query checklist (query recipes, chưa phải SQL executable)
 
-## 4. Chiến lược additive đề xuất
+| Thời điểm | Aggregate query cần review | Điều kiện đạt / dừng |
+|---|---|---|
+| Trước DDL | `COUNT(*)` riêng trên từng legacy table; orphan count bằng LEFT JOIN owner tới `auth.users`; nếu cần phân bố theo owner thì chỉ trả bucket/count tổng hợp, không xuất UUID; kiểm tra catalog columns/constraints/policies/grants/indexes. | Snapshot hiện tại 0/0 là baseline tham khảo; nếu count thay đổi, dừng trước backfill và yêu cầu mapping review. Orphan phải bằng 0. |
+| Trước backfill | Tổng source rows; số rows đủ điều kiện/unresolved theo từng loại field; invalid format/range counts; mapping conflicts/duplicate counts. Không trả row values. | Không có mapping duplicate; mọi unresolved row phải được giữ ở legacy và không chuyển vào target contract API. |
+| Sau backfill staging | Source counts unchanged; target counts bằng số rows đã được duyệt và đủ dữ liệu; mapping coverage/uniqueness; target owner-orphan count; duration recompute mismatch count. | Mọi chênh lệch phải giải thích/được duyệt; nếu không thì rollback staging và dừng. Không xóa source để làm counts khớp. |
+| Trước/sau cutover | Target table/field/security metadata; aggregate API success/error counts; owner-isolation tests; account-data deletion reconciliation trên fixture riêng. | Schema, API, RLS/grants và deletion path phải tương thích; cross-user hoặc deletion mismatch là stop condition. |
 
-Đây là chiến lược để review, chưa phải lệnh triển khai:
+Queries này phải được review và viết riêng cho schema/version đã xác minh tại thời điểm rehearsal. Không chạy `EXPLAIN ANALYZE` như dry-run vì nó thực thi query. DDL dry-run chỉ thực hiện trên restored staging, không trên production.
 
-1. **Đóng băng hiện trạng và inventory chỉ đọc:** xác minh project/environment; lấy schema catalog cho columns/types/nullability/default/PK/FK/check/index/RLS/policies/grants/triggers và row counts. Không xuất row content vào repo.
-2. **Backup đầy đủ và restore rehearsal:** sao lưu schema, data, policies/grants, indexes, sequences, triggers/functions và identity dependencies theo công cụ được duyệt. Restore vào môi trường cô lập, chứng minh so sánh counts/integrity. Ghi rõ backup owner, retention, RPO/RTO.
-3. **Chọn mô hình chuyển tiếp:** ưu tiên cân nhắc bảng chuyển tiếp song song để giữ nguyên legacy tables; thay thế ít rủi ro hơn là shadow columns nếu constraints/consumers chứng minh tương thích. Chưa chốt tên bảng/cột, loại ID legacy hoặc DDL.
-4. **UUID mapping riêng:** cấp UUID mới cho từng row; lưu ánh xạ `(legacy_table, legacy_id_verified_type/value) → target_uuid` bền vững. Không cast hoặc tái sử dụng bigint thành UUID. Không xóa mapping trước khi chủ dự án cho phép kết thúc thời gian tương thích.
-5. **Giữ raw và đánh dấu unresolved:** mọi trường chưa có mapping an toàn (tags, dream date, sleep timestamps/quality/stages) phải giữ nguyên source, có trạng thái unresolved và không bị biến thành default “có vẻ hợp lệ”. Không đưa row chưa đủ trường bắt buộc vào API mới.
-6. **Backfill idempotent theo batch sau khi được duyệt:** có checkpoint, row-level error report, retry không nhân đôi target row; không update/drop legacy record. Tách migration schema khỏi backfill dữ liệu nếu cần.
-7. **Reconcile trước cutover:** so tổng row, row mapped/unresolved/quarantined, UUID uniqueness, owner/FK integrity, raw-to-target checksums/field comparisons, timestamp parse, duration recompute và số lượng lỗi theo owner. Sai lệch phải nằm trong ngưỡng được duyệt; không tự loại bỏ rows.
-8. **Staging và cutover có cổng:** chạy test bằng tài khoản/fixtures riêng trên bản restore; cross-account isolation, API CRUD, RLS/grants, rollback và replay. Chuyển API traffic chỉ sau khi phê duyệt. Giữ legacy tables và đường phục hồi trong đợt đầu.
-9. **Không cleanup trong đợt đầu:** không drop/rename legacy tables/columns, không xóa mapping/quarantine, không thu hẹp grants hoặc dữ liệu. Cleanup là migration riêng sau thời gian quan sát và phê duyệt độc lập.
+### Pha 1 — Backup và restore rehearsal (không sửa production)
 
-### Shadow columns hay bảng chuyển tiếp?
+- Chủ dự án chọn công cụ backup bao gồm schema/data, RLS/policies/grants, indexes, FK/constraints, sequences/identity, triggers/functions và metadata cần phục hồi.
+- Giữ backup ngoài Git, hạn chế truy cập. Chốt retention, RPO/RTO, owner và quy trình khôi phục.
+- Restore vào project/database cô lập; đối chiếu counts, schema/security metadata, ownership/FK và khả năng đọc trước khi phê duyệt DDL.
+- **Stop:** không có backup xác nhận hoặc restore rehearsal thất bại thì không chạy DDL/backfill.
 
-- **Bảng chuyển tiếp song song (đang được ưu tiên để đánh giá):** cách ly schema/API mới, giữ legacy table nguyên vẹn và rollback cutover dễ hơn; đổi lại cần mapping, đồng bộ owner/index/policies, và quyết định xử lý dữ liệu chưa ánh xạ.
-- **Shadow columns:** ít thay đổi table/API names nhưng rủi ro nhầm old/new columns, constraints và client cũ ghi song song; chỉ xem xét sau inventory consumers/transactions và có quy tắc dual-write rõ.
-- Chưa chọn phương án cuối. Không có executable SQL trong tài liệu này.
+### Pha 2 — Staging rehearsal (DDL + writes chỉ trên staging)
 
-## 5. Đối chiếu và integrity gates
+- Tạo target tables/mapping/policies/indexes additive trên staging từ migration version được review; legacy objects staging giữ nguyên.
+- Nếu legacy counts vẫn 0, không backfill. Nếu có rows, chỉ backfill sau khi mapping từng field mơ hồ được chủ dự án duyệt; raw source giữ nguyên.
+- SQL dry-run là các SELECT aggregate/validation checks được review trước và sau; không chạy `EXPLAIN ANALYZE` vì nó thực thi query. Không tạo production SQL trong task tài liệu này.
+- Backfill phải idempotent, có checkpoint và error/unresolved accounting; uniqueness/mapping conflict dừng batch, không overwrite.
+- Kiểm tra cross-user A/B, ownership filter Express, RLS flags/policies, grants, UUID/PK/FK, response DTO, tags containment, date filters, timestamp validation, duration server calculation và delete cascade trên fixtures riêng.
 
-Trước backfill và trước cutover phải có báo cáo (không chỉ log “success”):
+### Pha 3 — Production additive DDL/backfill (phê duyệt riêng)
 
-- Số row source theo bảng và owner; số row target/mapped/unresolved; số row bị lỗi và lý do. Source count không đổi.
-- Một mapping target UUID duy nhất cho mỗi legacy key; không có target UUID trùng hoặc map nhầm owner.
-- FK/orphan owner, uniqueness, not-null/check/default, RLS/policies/grants và index phù hợp đã kiểm tra trên staging.
-- Raw legacy values giữ được từ backup/legacy table; so sánh field-by-field hoặc checksum theo chính sách PII an toàn.
-- Không có conversion ngầm cho tags/date/timezone/quality/stages. Report riêng tất cả giá trị chưa thể diễn giải.
-- Với sleep rows đã được ánh xạ hợp lệ, đối chiếu duration target với phép tính Express từ timestamp được duyệt; không ghi đè duration cũ trước khi có kết quả reconcile.
-- Thử API bằng hai user riêng: không đọc/sửa/xóa chéo owner; kiểm tra token thiếu/hết hạn, retry và các lỗi sanitized.
+- Chỉ sau khi staging, backup/restore, mapping decisions, rehearsal, lock/runtime estimate và owner approvals đạt.
+- Recheck counts/metadata ngay trước chạy. DDL chỉ tạo target structures, policies/indexes/mapping objects đã review; không drop/rename/alter legacy fields hoặc grants.
+- Nếu counts khác preflight đã duyệt, stop trước backfill. Mọi data write chạy theo batches có checkpoint và reconciliation; bảo toàn raw legacy source.
+- Không thực hiện pha này trong Đợt 8E.3.
 
-## 6. Backup, restore và rollback
+### Pha 4 — Cutover và rollback
 
-- Không bắt đầu thay đổi trước backup có thể khôi phục. Backup phải có schema, policies/grants, indexes, FK/constraints, sequences/identity, triggers/functions và dữ liệu legacy cần bảo toàn; lưu ngoài Git với quyền hạn chế.
-- Restore rehearsal vào project riêng/staging, xác nhận số lượng, quan hệ, quyền và khả năng chạy lại các bước. Một backup job hoàn tất không thay thế restore rehearsal.
-- Chốt RPO, RTO, retention, người sở hữu backup và người có quyền dừng/khôi phục trước khi migration.
-- Trước cutover: rollback về API/schema legacy mà không xóa source. Sau khi target bắt đầu nhận writes: cần forward-fix hoặc replay plan có kiểm thử; không rollback bằng cách bỏ target columns/tables.
-- Đợt đầu không drop/rename và không xóa rows/mapping. Giữ đường đọc/khôi phục legacy cho tới khi chủ dự án phê duyệt cleanup riêng.
+- Cutover API source sang target tables trong rollout riêng; có maintenance/freeze hoặc consumer compatibility plan cho mọi legacy writer.
+- Trước khi target nhận writes: có thể rollback route/config về legacy behavior; không đổi/xóa legacy objects.
+- Sau khi target nhận writes: rollback không được bỏ target tables hoặc target rows. Dùng forward-fix hoặc route rollback tới một API version vẫn đọc target; không hứa rằng API legacy có thể biểu diễn đầy đủ record mới.
+- Duy trì target + legacy + mapping trong thời gian quan sát. Cleanup/drop/rename là migration riêng, destructive risk, cần backup mới và approval rõ ràng.
 
-## 7. RLS, ownership và quyền truy cập
+## 8. Reconciliation gates và điều kiện dừng
 
-- Trạng thái RLS/policies/grants thực tế **chưa được xác minh** bởi schema probes Đợt 8E.1. SQL trong repository chỉ là tham chiếu.
-- Trước cutover phải inventory live policy/grants. API server dùng privileged Supabase client nên mỗi query phải lọc theo `req.user.id` từ JWT đã xác minh; test/static review mọi list, insert, update, delete.
-- Nếu bật direct authenticated CRUD policy, xác minh `auth.uid() = user_id` cho SELECT/INSERT/UPDATE/DELETE bằng hai user A/B trên staging; quyết định quyền direct client phù hợp với kiến trúc Express-only.
-- Không đưa service-role key vào Flutter. Không sửa policy/grants trong kế hoạch này.
+Trước khi migration/backfill tiếp tục, reconcile:
 
-## 8. Điều kiện cho phép tạo và áp dụng migration
+- Legacy source counts, target counts, mapped/unresolved/error counts. Nếu source count không bằng snapshot/preflight expectation, dừng và điều tra.
+- Số UUID target duy nhất; một legacy key ánh xạ tối đa một UUID và một target UUID không trỏ nhiều legacy keys ngoài rule được duyệt.
+- Owner FK/orphan counts; mọi user mapping phải giữ đúng owner. Không xuất UUID/user identifiers trong báo cáo chia sẻ.
+- Field-level counts/comparison và checksum có kiểm soát; `tags`, ngày, timestamps, quality và stages không được chuyển nếu unresolved.
+- Sleep duration tính từ timestamp hợp lệ theo Express phải được so sánh với duration legacy; mọi mismatch báo cáo, không ghi đè âm thầm.
+- RLS/policy/grants, cascade, indexes, API response validation và cross-account tests đạt trên staging.
 
-Chỉ chuyển thành migration executable sau khi tất cả mục phù hợp được review/phê duyệt:
+**Dừng ngay** khi có count delta chưa giải thích, orphan owner, mapping duplicate, dữ liệu parse mơ hồ, constraint/policy/grant drift, backup/restore failure, test ownership failure, query error hoặc migration duration/lock vượt ngưỡng đã duyệt. Không bỏ qua lỗi bằng default hoặc xóa rows.
 
-1. Xác nhận rõ project/environment đang nhắm tới và đây không phải nhầm project.
-2. Hoàn tất read-only catalog/data inventory, gồm legacy columns thực tế, types, constraints, policies/grants và consumers.
-3. Quyết định có dữ liệu cần giữ và thời gian giữ legacy/mapping; trong Đợt 8E.1 mặc định là bảo toàn toàn bộ, không cleanup.
-4. Phê duyệt từng mapping mơ hồ: tags serialization; nguồn `dream_date`; timezone/DST của thời gian ngủ; quality; sleep stages; notes null/empty; owner/orphan handling.
-5. Chốt shadow columns hay bảng chuyển tiếp, UUID mapping retention, API cutover/versioning và write compatibility.
-6. Backup hoàn tất và restore rehearsal đạt; RPO/RTO/retention và rollback/forward-fix owner được xác nhận.
-7. Staging run, idempotency, batch/lock estimates, reconciliation thresholds và ownership/RLS tests đạt.
-8. Chủ dự án phê duyệt rõ migration version, môi trường, thời điểm thực thi và người chịu trách nhiệm. Không suy ra phê duyệt thực thi chỉ từ yêu cầu lập kế hoạch.
+## 9. Các quyết định và điều kiện còn chờ
 
-## 9. Trạng thái sau Đợt 8E.1
+- Chủ dự án review/chấp thuận phương án B (chỉ đề xuất; chưa phê duyệt migration/cutover).
+- Chốt naming target/mapping tables và exact grants cho Express-only access; giữ nguyên legacy grants.
+- Chốt consumer inventory, legacy write freeze/maintenance window và rollout API version.
+- Nếu preflight phát hiện rows mới: tags delimiter/escaping, `dream_date` source/remediation, sleep time format/timezone/DST, quality mapping, stage unknown handling, notes handling và row unresolved policy.
+- Chốt backup method, RPO/RTO, retention, restore owner, staging environment, reconciliation thresholds và cutover/rollback owner.
+- Migration executable, production DDL/backfill, policy/grant changes và cleanup cần approval riêng.
 
-- Kế hoạch cập nhật phân biệt kết quả probe live với SQL tham chiếu trong repo.
-- Không đọc `.env`/`server/.env`, không chạy SQL, không lấy row data, không tạo migration executable, không thay schema/policy/dữ liệu, không sửa Flutter/Express/API và không commit/push.
-- Dream/Sleep CRUD chưa được bật trong Flutter; các API routes phụ thuộc schema contract mới.
-- Các quyết định và tác động được theo dõi riêng tại `docs/8E_MIGRATION_DECISIONS.md`.
+## 10. Phạm vi Đợt 8E.3
 
-## 10. Inventory thủ công đang chờ — Đợt 8E.2
-
-- Bộ truy vấn metadata/aggregate chỉ đọc được tạo tại `docs/8E_READ_ONLY_INVENTORY.sql`; cách chạy và chia sẻ output ở `docs/8E2_INVENTORY_GUIDE.md`.
-- Các truy vấn chưa được chạy bởi agent. Inventory live đầy đủ **chưa hoàn tất**; schema/type/constraint/RLS/grants/index/trigger/function/row counts vẫn chờ chủ dự án tự chạy và gửi kết quả đã che dữ liệu nhạy cảm.
-- Bộ SQL chỉ chứa SELECT và comments, không có row-level personal data selection, DDL hoặc lệnh ghi. `COUNT(*)` có thể scan bảng và phản ánh visibility của role/RLS hiện hành; chỉ chạy nếu chấp nhận tải đọc.
-- Không thay các câu hỏi mapping hoặc cổng backup/restore, staging, rollback và phê duyệt migration ở các phần trước.
+Chỉ cập nhật tài liệu dựa trên inventory được cung cấp và source/contract đã review. Không đọc/sửa `.env` hoặc `server/.env`; không kết nối/chạy SQL/backup/restore/migration; không sửa Flutter, Express, API, schema, policies, grants hoặc dữ liệu; không commit/push. Inventory live được ghi nhận là snapshot; không chạy lại trong đợt này.

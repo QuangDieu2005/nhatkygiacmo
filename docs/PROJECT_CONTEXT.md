@@ -81,3 +81,11 @@ Giai đoạn 2 tạo `DATA_CONTRACT.md`, `API_SPECIFICATION.md`, `DATABASE_MIGRA
 - Tạo `docs/8E_READ_ONLY_INVENTORY.sql` gồm metadata/catalog SELECT và aggregate count để chủ dự án review/chạy thủ công; tạo `docs/8E2_INVENTORY_GUIDE.md` để hướng dẫn cách chạy và chia sẻ kết quả an toàn.
 - Bộ query chưa được chạy. Inventory live vẫn chưa hoàn tất; không coi output 8E.1 column-presence probe là xác minh type, constraints, RLS/grants, indexes, triggers/functions hoặc row counts.
 - Chưa có migration executable hoặc thay đổi Supabase. CRUD Dream/Sleep tiếp tục mock/local cho đến khi inventory và mapping được review.
+
+## Cập nhật sau Đợt 8E.3 — 2026-11-13
+
+- Chủ dự án cung cấp inventory live chi tiết: `dreams` và `sleep_records` có bigint identity PK, UUID owner FK cascade, RLS/policies owner-scope, index owner/created; các cột legacy/target, checks/defaults và counts được ghi trong `docs/SUPABASE_MIGRATION_PLAN.md`.
+- Count tại snapshot: 0/0; phải recheck trước migration. Không có custom triggers; không có direct catalog function dependency, điều này không loại trừ PL/pgSQL/SQL động. Grants đã kiểm tra nhưng không tự ý đổi.
+- Đề xuất review là tạo bảng contract mới song song, giữ legacy tables nguyên vẹn; chưa được phê duyệt triển khai. Tags/date/timezone/quality/stages chưa được map.
+- Backend `DELETE /api/account/data` hiện chỉ xóa hai legacy tables qua hai request không atomic; phải xử lý target tables và recovery/atomicity trong rollout backend trước khi expose CRUD.
+- Không chạy lại SQL hoặc sửa Supabase trong Đợt 8E.3; Flutter Dream/Sleep CRUD vẫn mock/local.

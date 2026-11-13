@@ -61,3 +61,9 @@ Không bắt đầu migration executable trước khi có inventory, quyết đ�
 
 - Đã chuẩn bị bộ SQL inventory chỉ đọc và hướng dẫn để chủ dự án chạy thủ công trong SQL Editor; chưa chạy query, chưa xác nhận inventory live đầy đủ.
 - Bước tiếp theo là chủ dự án review/chạy từng nhóm, gửi lại metadata đã che thông tin nhạy cảm; sau đó mới cập nhật mapping/decision log. Chưa thực hiện migration hoặc cutover CRUD.
+
+## Cập nhật sau Đợt 8E.3 — 2026-11-13
+
+- Inventory live chi tiết do chủ dự án cung cấp đã được áp dụng vào migration design. Counts 0/0 là snapshot, cần recheck ngay trước migration.
+- Phương án đề xuất để review: bảng contract mới song song, giữ nguyên legacy schema/data; nếu count khác 0, dừng backfill cho đến khi mapping được phê duyệt.
+- Chưa migration/cutover. Chờ approval về target naming/grants, mappings nếu phát sinh rows, backup/restore, staging reconciliation, consumer freeze và rollback owner. Account-data deletion hiện chỉ xử lý legacy tables và không atomic; cần thiết kế trước khi mở CRUD target.
