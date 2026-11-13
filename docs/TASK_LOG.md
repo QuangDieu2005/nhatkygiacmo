@@ -286,3 +286,9 @@
 - Tạo `docs/SUPABASE_MIGRATION_PLAN.md` gồm bảng sai khác/risks, kế hoạch UUID mapping (không cast bigint), tags/date/sleep legacy data mapping cần xác nhận, pha backup/restore/staging/additive backfill/cutover/cleanup, RLS/ownership tests, checklist và gates/phê duyệt trước migration.
 - Kiểm tra tính nhất quán: plan đối chiếu contract Đợt 8A.2 và API source; xác nhận schema tham chiếu chưa tương thích. Các điểm chưa biết (delimiter tags, nguồn dream_date, timezone sleep text, mapping quality, stages, actual data/consumers) được để mở để chủ dự án quyết định.
 - `git diff --check`: PASS, exit 0 (cần chạy lại sau entry này). Chỉ cập nhật tài liệu; không sửa/chạy SQL, không kết nối Supabase, không đọc `.env`/`server/.env`, không thay đổi auth/API/source/database, không commit/push.
+## 2026-11-13 - Đợt 8B.2: Làm sạch file cấu hình mẫu
+
+- Thay giá trị trong `server/.env.example` bằng ví dụ/placeholder; giữ đúng các biến server yêu cầu (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) và các biến runtime (`PORT`, `NODE_ENV`, `API_BASE_URL`, `CORS_ORIGIN`). Ghi rõ service-role chỉ dùng server, không đưa vào Flutter.
+- Thay `.env.example` gốc bằng ghi chú Flutter không load dotenv/CRUD Supabase trực tiếp; cấu hình Supabase thuộc server example. Chỉ kiểm tra tên biến, không ghi lại URL/key.
+- Đối chiếu source: backend yêu cầu ba biến Supabase trên; trong Flutter không có tham chiếu dotenv, Supabase initialization hoặc CRUD trực tiếp. `supabase_flutter` vẫn còn trong dependency lock/manifest nhưng không thấy được gọi từ `lib/`.
+- Không mở/sửa `.env` hoặc `server/.env`; không sửa source/dependency/API/SQL/database, không kết nối/migration, không commit/push.
