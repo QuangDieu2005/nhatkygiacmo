@@ -50,3 +50,9 @@ Không bắt đầu migration executable trước khi có inventory, quyết đ�
 - Auto-refresh on protected-request 401, one retry, concurrent single-flight, delayed-401 reuse of the rotated token, local session clearing, and AuthProvider route refresh are implemented and covered by fake-based tests.
 - The configured Supabase project responds to read-only checks, but its current Dream/Sleep columns do not match the API contract. The next data-integration gate is a reviewed schema/migration plan and approved handling of legacy data; do not enable CRUD against the incompatible schema.
 - End-to-end Auth/CRUD verification with the real Express/Supabase environment remains outstanding.
+
+## Cập nhật sau Đợt 8E.1 — 2026-11-13
+
+- Đã cập nhật kế hoạch migration additive ưu tiên giữ nguyên legacy data và khả năng rollback; chưa có migration SQL executable.
+- Trước migration cần hoàn tất live catalog/data inventory chỉ đọc, quyết định mapping mơ hồ, backup + restore rehearsal, staging reconciliation, RLS/ownership test và phê duyệt rõ môi trường/lịch thực thi.
+- Flutter Dream/Sleep CRUD tiếp tục ở mock/local cho tới khi schema đích sẵn sàng và tương thích; không chuyển API client sang các route đang thiếu cột.

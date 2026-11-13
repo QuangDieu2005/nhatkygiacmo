@@ -68,3 +68,10 @@ Giai đoạn 2 tạo `DATA_CONTRACT.md`, `API_SPECIFICATION.md`, `DATABASE_MIGRA
 - Express uses Supabase Auth and its server-side database client. A read-only schema probe against the configured project confirmed that Dream/Sleep CRUD repositories in Flutter still use local fixture data.
 - The live `dreams` table is missing `clarity_score`, `is_lucid`, and `dream_date`. The live `sleep_records` table is missing `start_time`, `end_time`, `quality_score`, all three sleep-stage minute fields, and `notes`. Existing routes query these contract fields, so Dream/Sleep CRUD cannot be enabled safely until schema compatibility is resolved.
 - No rows were fetched and no database changes were made. Migration remains gated on approved mapping decisions, backup/restore rehearsal, and explicit approval.
+
+## Cập nhật sau Đợt 8E.1 — 2026-11-13
+
+- `docs/SUPABASE_MIGRATION_PLAN.md` phân biệt schema tham chiếu trong repository với cột đã probe trên project live. Probe chỉ xác nhận sự hiện diện cột, không xác minh type, constraint, RLS/policy/grant hoặc row data.
+- Migration proposal ưu tiên bảo toàn: giữ legacy tables/raw values, dùng UUID mapping riêng thay vì cast ID, không drop/rename trong đợt đầu, giữ trạng thái unresolved cho tags/date/timezone/quality/stages chưa ánh xạ.
+- `docs/8E_MIGRATION_DECISIONS.md` liệt kê quyết định đã chốt, câu hỏi còn thiếu, yêu cầu backup/restore, staging, rollback và cổng phê duyệt.
+- Chưa tạo SQL executable, không chạy query ghi, migration hoặc backup/restore; chưa sửa Flutter/Express/API/schema/database.

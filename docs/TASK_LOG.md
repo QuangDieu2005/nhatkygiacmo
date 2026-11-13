@@ -324,3 +324,13 @@
 - Read-only REST schema probes completed against the configured Supabase project using `SELECT` with `limit(0)`; no user rows were fetched. `dreams` supports `id`, `user_id`, `title`, `content`, `emotion`, `tags`, and `created_at`, but lacks `clarity_score`, `is_lucid`, and `dream_date`. `sleep_records` supports `id`, `user_id`, and `duration_minutes`, but lacks `start_time`, `end_time`, `quality_score`, `deep_sleep_minutes`, `light_sleep_minutes`, `rem_sleep_minutes`, and `notes`.
 - Flutter Dream/Sleep repositories remain fixture/local implementations. Existing Express CRUD routes expect the missing contract fields; CRUD must not be exposed until a schema-compatible migration/decision is reviewed.
 - No migration or write query was executed. Do not read `.env` or `server/.env`; runtime loaded configured credentials without printing them.
+
+## Đợt 8E.1 — Chuẩn bị phương án migration bảo toàn dữ liệu (2026-11-13)
+
+- Đọc `AGENTS.md`, `PROJECT_CONTEXT.md`, `DEVELOPMENT_PLAN.md`, `TASK_LOG.md`, `SUPABASE_MIGRATION_PLAN.md`, `DATA_CONTRACT.md` và `API_SPECIFICATION.md`.
+- Viết lại `docs/SUPABASE_MIGRATION_PLAN.md` để phân biệt live column probe với `supabase_schema.sql` tham chiếu. Live probe chỉ xác nhận column presence; không suy diễn type/constraint hoặc RLS/grants. Lập bảng mapping Dream/Sleep, đánh dấu rõ dữ liệu/chuyển đổi chưa được xác minh.
+- Đề xuất quy trình additive: giữ legacy tables/values, UUID mapping riêng (không cast bigint), xem xét parallel transition tables/shadow columns, unresolved handling, reconciliation, staging, backup/restore và rollback. Không drop/rename trong đợt đầu.
+- Tạo `docs/8E_MIGRATION_DECISIONS.md` ghi quyết định đã chốt, quyết định còn thiếu và tác động; liệt kê điều kiện backup/restore, staging/rollback và các phê duyệt cần có.
+- Cập nhật `docs/PROJECT_CONTEXT.md` và `docs/DEVELOPMENT_PLAN.md` đồng bộ: Flutter Dream/Sleep CRUD vẫn mock; chưa migration; yêu cầu quyết định mapping, backup/restore và phê duyệt trước khi thực thi.
+- Kiểm tra nhất quán tài liệu: trạng thái live field availability khớp với kết quả probe đã log; legacy sleep fields/types được đánh dấu chưa xác minh live. `git diff --check`: PASS.
+- Chỉ sửa 5 tài liệu: `docs/SUPABASE_MIGRATION_PLAN.md`, `docs/8E_MIGRATION_DECISIONS.md`, `docs/PROJECT_CONTEXT.md`, `docs/DEVELOPMENT_PLAN.md`, `docs/TASK_LOG.md`. Không đọc/sửa `.env`/`server/.env`; không chạy SQL/migration/backup/restore, không đổi schema/policy/data/source, không commit/push.
